@@ -4105,6 +4105,118 @@ function applyDesignToDOM(designOrId) {
 }
 
 
+// --- VIDEO STREAMING & SOUND TOGGLE HELPERS (Mobile Audio & Video Fix) ---
+function formatVideoUrlForStreaming(url) {
+  if (!url) return '';
+  const trimmed = url.trim();
+  // Google Drive link auto-conversion to preview streaming link
+  const gDriveMatch = trimmed.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (gDriveMatch && gDriveMatch[1]) {
+    return `https://drive.google.com/file/d/${gDriveMatch[1]}/preview`;
+  }
+  // YouTube link auto-conversion to embed streaming link
+  const ytMatch = trimmed.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]+)/);
+  if (ytMatch && ytMatch[1]) {
+    return `https://www.youtube.com/embed/${ytMatch[1]}?autoplay=1&mute=0&controls=1&enablejsapi=1`;
+  }
+  return trimmed;
+}
+
+function isIframeVideoUrl(url) {
+  if (!url) return false;
+  return url.includes('drive.google.com') || url.includes('youtube.com') || url.includes('youtu.be') || url.includes('vimeo.com');
+}
+
+function toggleVideoSound(btn, event) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  const container = btn.closest('.product-media') || btn.closest('#quickview-main-media') || btn.closest('.story-video-container') || btn.parentElement;
+  if (!container) return;
+  const video = container.querySelector('video');
+  if (!video) return;
+
+  const iconEl = btn.querySelector('.sound-icon') || btn;
+  const textEl = btn.querySelector('.sound-text');
+
+  if (video.muted) {
+    video.muted = false;
+    video.volume = 1.0;
+    video.play().catch(() => {});
+    if (iconEl) iconEl.textContent = '🔊';
+    if (textEl) textEl.textContent = 'كتم الصوت';
+    btn.classList.add('sound-active');
+    btn.style.borderColor = '#50C878';
+    btn.style.color = '#50C878';
+    if (window.showToast) window.showToast('🔊 تم تشغيل الصوت بنجاح', 'success');
+  } else {
+    video.muted = true;
+    if (iconEl) iconEl.textContent = '🔇';
+    if (textEl) textEl.textContent = 'تشغيل الصوت';
+    btn.classList.remove('sound-active');
+    btn.style.borderColor = 'var(--accent-gold)';
+    btn.style.color = 'var(--accent-gold)';
+  }
+}
+
+function applyLightingSettings(lighting) {
+  if (!lighting) {
+    try {
+      const s = localStorage.getItem('luster_lighting_settings');
+      if (s) lighting = JSON.parse(s);
+    } catch(e) {}
+  }
+  if (!lighting) return;
+  const glow = lighting.glow !== undefined ? lighting.glow : 14;
+  const shadow = lighting.shadow !== undefined ? lighting.shadow : 40;
+  const blur = lighting.blur !== undefined ? lighting.blur : 16;
+  document.documentElement.style.setProperty('--glow-filter', `drop-shadow(0 0 ${glow}px var(--accent-gold-glow))`);
+  document.documentElement.style.setProperty('--card-shadow', `0 10px ${shadow}px rgba(0,0,0,0.8)`);
+  document.documentElement.style.setProperty('--glass-blur', `blur(${blur}px)`);
+  if (lighting.shimmer) {
+    document.body.classList.add('has-animated-shimmer');
+  } else {
+    document.body.classList.remove('has-animated-shimmer');
+  }
+}
+
+function applyCartSettings(cartSettings) {
+  let mode = cartSettings?.mode;
+  if (!mode) {
+    try {
+      mode = localStorage.getItem('luster_cart_motion_mode');
+    } catch(e) {}
+  }
+  mode = mode || 'dock-gentle';
+  const dockBar = document.getElementById('luster-dock-bar');
+  if (dockBar) {
+    dockBar.classList.remove('dock-gentle', 'dock-static', 'floating-bubble');
+    dockBar.classList.add(mode);
+  }
+}
+
+function applyThemeCustomizations(theme) {
+  if (!theme) return;
+  const designId = theme.activeDesignId || theme.activePreset || 'royal-gold';
+  if (typeof getDesignById === 'function' && typeof applyDesignToDOM === 'function') {
+    const designObj = getDesignById(designId);
+    if (designObj) applyDesignToDOM(designObj);
+  }
+
+  if (theme.typography && theme.typography.headingFamily) {
+    document.documentElement.style.setProperty('--font-heading', theme.typography.headingFamily);
+    document.documentElement.style.setProperty('--font-luxury', theme.typography.headingFamily);
+  }
+}
+
+window.formatVideoUrlForStreaming = formatVideoUrlForStreaming;
+window.isIframeVideoUrl = isIframeVideoUrl;
+window.toggleVideoSound = toggleVideoSound;
+window.applyLightingSettings = applyLightingSettings;
+window.applyCartSettings = applyCartSettings;
+window.applyThemeCustomizations = applyThemeCustomizations;
+
 // --- Module: translations.js ---
 // LUSTER Central Translation Dictionary
 // Complete Bilingual System: Arabic (RTL) & English (LTR)
@@ -5463,8 +5575,18 @@ class LusterMediaStorage {
       if (!store.state.media) store.state.media = {};
       Object.keys(mediaMap).forEach(k => {
         store.state.media[k] = mediaMap[k];
+        if (k.startsWith('product_video_') && mediaMap[k] && mediaMap[k].url) {
+          const pid = k.replace('product_video_', '');
+          const prod = (store.state.products || []).find(p => p.id === pid);
+          if (prod && (!prod.video || prod.video.startsWith('blob:'))) {
+            prod.video = mediaMap[k].url;
+          }
+        }
       });
       applyMediaCustomizations(store);
+      if (window.lusterApp && typeof window.lusterApp.renderProducts === 'function') {
+        window.lusterApp.renderProducts();
+      }
     } catch(e) {
       console.warn('Error loading media from IndexedDB:', e);
     }
@@ -5685,27 +5807,74 @@ class MotionEngine {
   // Render Dynamic Multi-Letter Animated Logo
   renderLogo(containerEl) {
     if (!containerEl) return;
-    const logoConfig = this.store.getState()?.logo;
-    if (!logoConfig || !logoConfig.enabled) {
+    const state = this.store.getState() || {};
+    const logoConfig = state.logo || {
+      enabled: true,
+      letterSpacing: '4px',
+      fontSize: '32px',
+      letters: [
+        { char: 'L', color: '#D4AF37', motion: 'bounce', speed: '1.2s', delay: '0s' },
+        { char: 'U', color: '#F3E5AB', motion: 'pulse', speed: '1.4s', delay: '0.2s' },
+        { char: 'S', color: '#D4AF37', motion: 'bounce', speed: '1.2s', delay: '0.4s' },
+        { char: 'T', color: '#E5C158', motion: 'shimmer', speed: '1.6s', delay: '0.6s' },
+        { char: 'E', color: '#F3E5AB', motion: 'pulse', speed: '1.4s', delay: '0.8s' },
+        { char: 'R', color: '#D4AF37', motion: 'bounce', speed: '1.2s', delay: '1.0s' }
+      ]
+    };
+
+    if (!logoConfig.enabled) {
       containerEl.innerHTML = `<span class="luster-letter" style="color:var(--accent-gold); font-size:32px;">LUSTER</span>`;
       return;
     }
 
     containerEl.style.letterSpacing = logoConfig.letterSpacing || '4px';
 
+    // Integrate with custom Text Motion Control saved by owner
+    let customMotion = state.motion?.logoAnimation;
+    if (!customMotion) {
+      try {
+        const savedTm = localStorage.getItem('luster_text_motion');
+        if (savedTm) customMotion = JSON.parse(savedTm);
+      } catch(e) {}
+    }
+
     const lettersHtml = logoConfig.letters.map((l, index) => {
       let animStyle = '';
-      if (l.motion === 'bounce') {
-        animStyle = `animation: lusterLetterBounce ${l.speed || '1.2s'} infinite ease-in-out ${l.delay || '0s'};`;
-      } else if (l.motion === 'pulse') {
-        animStyle = `animation: lusterLetterPulse ${l.speed || '1.4s'} infinite ease-in-out ${l.delay || '0s'};`;
-      } else if (l.motion === 'shimmer') {
-        animStyle = `animation: lusterLetterShimmer ${l.speed || '1.6s'} infinite ease-in-out ${l.delay || '0s'};`;
-      } else if (l.motion === 'float') {
-        animStyle = `animation: lusterLetterFloat ${l.speed || '1.3s'} infinite ease-in-out ${l.delay || '0s'};`;
-      }
-
       const glowFilter = l.glow ? `drop-shadow(0 0 6px ${l.glow})` : '';
+
+      if (customMotion) {
+        const isTarget = customMotion.target === 'all' || customMotion.target === String(index);
+        if (isTarget) {
+          const dur = (customMotion.duration || 5.0) + 's';
+          const del = ((customMotion.delay || 0.35) * index) + 's';
+          const style = (customMotion.style || 'Wave').toLowerCase();
+          const dist = (customMotion.distance || 6) + 'px';
+
+          if (style.includes('bounce')) {
+            animStyle = `animation: lusterLetterBounce ${dur} infinite ease-in-out ${del};`;
+          } else if (style.includes('pulse')) {
+            animStyle = `animation: lusterLetterPulse ${dur} infinite ease-in-out ${del};`;
+          } else if (style.includes('shimmer')) {
+            animStyle = `animation: lusterLetterShimmer ${dur} infinite ease-in-out ${del};`;
+          } else if (style.includes('float')) {
+            animStyle = `animation: lusterLetterFloat ${dur} infinite ease-in-out ${del};`;
+          } else if (style.includes('glow')) {
+            animStyle = `animation: textGlowPulse ${dur} infinite alternate ease-in-out ${del};`;
+          } else {
+            animStyle = `animation: lusterLetterBounce ${dur} infinite ease-in-out ${del};`;
+          }
+        }
+      } else {
+        if (l.motion === 'bounce') {
+          animStyle = `animation: lusterLetterBounce ${l.speed || '1.2s'} infinite ease-in-out ${l.delay || '0s'};`;
+        } else if (l.motion === 'pulse') {
+          animStyle = `animation: lusterLetterPulse ${l.speed || '1.4s'} infinite ease-in-out ${l.delay || '0s'};`;
+        } else if (l.motion === 'shimmer') {
+          animStyle = `animation: lusterLetterShimmer ${l.speed || '1.6s'} infinite ease-in-out ${l.delay || '0s'};`;
+        } else if (l.motion === 'float') {
+          animStyle = `animation: lusterLetterFloat ${l.speed || '1.3s'} infinite ease-in-out ${l.delay || '0s'};`;
+        }
+      }
 
       return `
         <span class="luster-letter"
@@ -6449,6 +6618,917 @@ const DEFAULT_LUSTER_STATE = {
   }
 };
 
+
+// =========================================================================
+// LUSTER CloudBridge - Real-Time Multi-Device Shared Data & Synchronization
+// Universal GitHub Pages Cloud Sync Engine
+// =========================================================================
+
+function formatVideoUrlForStreaming(url) {
+  if (!url) return '';
+  const clean = String(url).trim();
+  const driveMatch = clean.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (driveMatch) {
+    return `https://drive.google.com/file/d/${driveMatch[1]}/preview`;
+  }
+  const ytMatch = clean.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]+)/);
+  if (ytMatch) {
+    return `https://www.youtube.com/embed/${ytMatch[1]}?autoplay=1&mute=0&loop=1`;
+  }
+  return clean;
+}
+
+async function compressImageToDataUri(file, maxDimension = 900, quality = 0.82) {
+  return new Promise((resolve) => {
+    try {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          let width = img.width;
+          let height = img.height;
+          if (width > maxDimension || height > maxDimension) {
+            if (width > height) {
+              height = Math.round((height * maxDimension) / width);
+              width = maxDimension;
+            } else {
+              width = Math.round((width * maxDimension) / height);
+              height = maxDimension;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          const dataUri = canvas.toDataURL('image/jpeg', quality);
+          resolve(dataUri);
+        };
+        img.onerror = () => resolve(e.target.result);
+        img.src = e.target.result;
+      };
+      reader.onerror = () => resolve('');
+      reader.readAsDataURL(file);
+    } catch(err) {
+      resolve('');
+    }
+  });
+}
+
+async function readFileAsDataUri(file) {
+  return new Promise((resolve) => {
+    try {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target.result);
+      reader.onerror = () => resolve('');
+      reader.readAsDataURL(file);
+    } catch(err) {
+      resolve('');
+    }
+  });
+}
+
+if (typeof window !== 'undefined') {
+  window.formatVideoUrlForStreaming = formatVideoUrlForStreaming;
+  window.compressImageToDataUri = compressImageToDataUri;
+  window.readFileAsDataUri = readFileAsDataUri;
+}
+
+class LusterCloudBridge {
+  constructor(store = null) {
+    this.store = store;
+    this.storeId = this.getStoreId();
+    this.customFirebaseUrl = this.getCustomFirebaseUrl();
+    this.ordersTopic = `luster_ord_${this.storeId}`;
+    this.stateTopic = `luster_st_${this.storeId}`;
+    this.liveSubscribers = new Set();
+    this.orders = this.loadLocalOrders();
+    this.state = this.loadLocalState();
+    this.acknowledgedOrders = this.loadAcknowledgedOrders();
+    this.isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+    this.cloudStatus = 'connected';
+    this.lastSyncedVersion = (this.state && this.state.version) || 0;
+    this.ntfyEventSource = null;
+    this.pollInterval = null;
+
+    this.initNetworkListeners();
+    this.initRealtimeSubscriptions();
+    this.startBackgroundSync();
+  }
+
+  getStoreId() {
+    try {
+      const customId = localStorage.getItem('luster_cloud_store_id');
+      if (customId && customId.trim()) return customId.trim();
+
+      if (typeof window !== 'undefined' && window.location) {
+        const host = (window.location.hostname || '').toLowerCase();
+        // Normalize pathname: ignore specific html file names to share exact same channel
+        const pathParts = (window.location.pathname || '').split('/').filter(p => p && !p.toLowerCase().includes('.htm'));
+        const repoName = pathParts[0] || 'luster_store';
+        const cleanHost = host.replace(/[^a-z0-9]/g, '_');
+        const cleanRepo = repoName.replace(/[^a-z0-9]/g, '_');
+        const combined = `luster_${cleanHost}_${cleanRepo}`.replace(/_+/g, '_').replace(/^_+|_+$/g, '');
+        if (combined && combined.length > 5) return combined;
+      }
+    } catch(e) {}
+    return 'luster_almohandis_systems_luster_store';
+  }
+
+  getCustomFirebaseUrl() {
+    try {
+      const url = localStorage.getItem('luster_custom_firebase_url');
+      return url && url.trim() ? url.trim().replace(/\/+$/, '') : '';
+    } catch(e) {
+      return '';
+    }
+  }
+
+  setCustomFirebaseUrl(url) {
+    try {
+      if (url && url.trim()) {
+        localStorage.setItem('luster_custom_firebase_url', url.trim());
+        this.customFirebaseUrl = url.trim().replace(/\/+$/, '');
+      } else {
+        localStorage.removeItem('luster_custom_firebase_url');
+        this.customFirebaseUrl = '';
+      }
+      this.initRealtimeSubscriptions();
+    } catch(e) {}
+  }
+
+  loadLocalOrders() {
+    try {
+      const saved = localStorage.getItem('luster_orders');
+      return saved ? JSON.parse(saved) : [];
+    } catch(e) {
+      return [];
+    }
+  }
+
+  saveLocalOrders(orders) {
+    try {
+      this.orders = orders;
+      localStorage.setItem('luster_orders', JSON.stringify(orders));
+    } catch(e) {}
+  }
+
+  loadLocalState() {
+    try {
+      const saved = localStorage.getItem('luster_cached_state');
+      if (saved) return JSON.parse(saved);
+    } catch(e) {}
+    if (typeof DEFAULT_LUSTER_STATE !== 'undefined') {
+      return JSON.parse(JSON.stringify(DEFAULT_LUSTER_STATE));
+    }
+    return { version: 12, brand: { name: 'LUSTER', currency: 'ج.م' }, products: [] };
+  }
+
+  saveLocalState(state) {
+    try {
+      this.state = state;
+      localStorage.setItem('luster_cached_state', JSON.stringify(state));
+    } catch(e) {}
+  }
+
+  loadAcknowledgedOrders() {
+    try {
+      const saved = localStorage.getItem('luster_acknowledged_orders');
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    } catch(e) {
+      return new Set();
+    }
+  }
+
+  saveAcknowledgedOrder(orderId) {
+    try {
+      this.acknowledgedOrders.add(orderId);
+      localStorage.setItem('luster_acknowledged_orders', JSON.stringify(Array.from(this.acknowledgedOrders)));
+    } catch(e) {}
+  }
+
+  initNetworkListeners() {
+    if (typeof window === 'undefined') return;
+    window.addEventListener('online', () => {
+      this.isOnline = true;
+      this.cloudStatus = 'connected';
+      this.syncNow();
+    });
+    window.addEventListener('offline', () => {
+      this.isOnline = false;
+      this.cloudStatus = 'offline';
+    });
+  }
+
+  initRealtimeSubscriptions() {
+    if (typeof window === 'undefined' || typeof EventSource === 'undefined') return;
+
+    // 1. Firebase EventSource if configured
+    if (this.customFirebaseUrl) {
+      try {
+        const fbUrl = `${this.customFirebaseUrl}/orders.json`;
+        const fbEs = new EventSource(fbUrl);
+        fbEs.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data && data.data) {
+              this.handleInboundOrderData(data.data);
+            }
+          } catch(e) {}
+        };
+      } catch(e) {}
+    }
+
+    // 2. ntfy.sh Orders Stream (instant pub/sub)
+    try {
+      if (this.ntfyOrdersEs) this.ntfyOrdersEs.close();
+      this.ntfyOrdersEs = new EventSource(`https://ntfy.sh/${this.ordersTopic}/sse`);
+      this.ntfyOrdersEs.onmessage = (event) => {
+        try {
+          const envelope = JSON.parse(event.data);
+          if (envelope && envelope.message) {
+            try {
+              const payload = JSON.parse(envelope.message);
+              this.handleInboundOrderData(payload);
+            } catch(e) {}
+          }
+        } catch(e) {}
+      };
+    } catch(e) {}
+
+    // 3. ntfy.sh Live State Stream (instant custom texts, products, studio changes)
+    try {
+      if (this.ntfyStateEs) this.ntfyStateEs.close();
+      this.ntfyStateEs = new EventSource(`https://ntfy.sh/${this.stateTopic}/sse`);
+      this.ntfyStateEs.onmessage = (event) => {
+        try {
+          const envelope = JSON.parse(event.data);
+          if (envelope && envelope.message) {
+            try {
+              const payload = JSON.parse(envelope.message);
+              this.handleInboundStateData(payload);
+            } catch(e) {}
+          }
+        } catch(e) {}
+      };
+    } catch(e) {}
+  }
+
+  handleInboundOrderData(payload) {
+    if (!payload) return;
+    let order = null;
+    if (payload.orderId) {
+      order = payload;
+    } else if (payload.order && payload.order.orderId) {
+      order = payload.order;
+    }
+
+    if (order) {
+      // Check if order exists in local array
+      const existingIdx = this.orders.findIndex(o => o.orderId === order.orderId);
+      if (existingIdx !== -1) {
+        // Merge latest status and timeline
+        this.orders[existingIdx] = { ...this.orders[existingIdx], ...order };
+      } else {
+        this.orders.unshift(order);
+      }
+      this.saveLocalOrders(this.orders);
+
+      // Trigger store listeners
+      if (this.store) {
+        this.store.emit('NEW_ORDER_BROADCAST', { type: 'NEW_ORDER', order });
+        this.store.emit('ORDER_UPDATED', { type: 'ORDER_UPDATED', order });
+      }
+
+      // Owner Siren Trigger: only if new and unacknowledged
+      if (order.statusCode === 'new' && !this.acknowledgedOrders.has(order.orderId)) {
+        if (window.lusterApp?.ownerDashboard) {
+          window.lusterApp.ownerDashboard.checkPendingNewOrders();
+        }
+      }
+    }
+  }
+
+  handleInboundStateData(payload) {
+    if (!payload) return;
+
+    // A1. State Revision Signal -> fetch full state from cloud KV
+    if (payload.type === 'STATE_REVISION') {
+      if ((payload.version || 0) > (this.state.version || 0)) {
+        this.fetchCloudState();
+      }
+      return;
+    }
+
+    // A. Granular Section Update (Text, Motion, Lighting, Theme, Products, etc.)
+    if (payload.type === 'SECTION_UPDATED' && payload.section) {
+      if (!this.state) this.state = this.loadLocalState();
+      this.state[payload.section] = payload.data;
+      this.state.version = Math.max(this.state.version || 0, payload.version || Date.now());
+      this.state.lastUpdated = new Date().toISOString();
+      this.saveLocalState(this.state);
+
+      if (this.store) {
+        if (!this.store.state) this.store.state = this.state;
+        this.store.state[payload.section] = payload.data;
+        this.store.state.version = this.state.version;
+        this.store.emit('SECTION_SAVED', { section: payload.section, version: this.state.version });
+        this.store.emit('LIVE_STATE_UPDATED', {
+          version: this.state.version,
+          description: payload.description || `تحديث قسم ${payload.section}`,
+          state: this.store.state
+        });
+      }
+
+      if (window.lusterApp && typeof window.lusterApp.mount === 'function') {
+        window.lusterApp.mount();
+      }
+      return;
+    }
+
+    // B. Full State Update
+    if (payload.type === 'STATE_UPDATED' && payload.state) {
+      if ((payload.version || 0) > (this.state.version || 0)) {
+        this.state = payload.state;
+        this.saveLocalState(this.state);
+        if (this.store) {
+          this.store.state = this.state;
+          this.store.emit('LIVE_STATE_UPDATED', {
+            version: payload.version,
+            description: payload.description || 'تحديث فوري من المتجر',
+            state: this.state
+          });
+        }
+        if (window.lusterApp && typeof window.lusterApp.mount === 'function') {
+          window.lusterApp.mount();
+        }
+      }
+    }
+  }
+
+  startBackgroundSync() {
+    if (this.pollInterval) clearInterval(this.pollInterval);
+    // Background polling every 3.5 seconds
+    this.pollInterval = setInterval(() => {
+      this.syncNow();
+    }, 3500);
+  }
+
+  async syncNow() {
+    if (typeof window === 'undefined' || !this.isOnline) return;
+    try {
+      await Promise.allSettled([
+        this.fetchCloudOrders(),
+        this.fetchCloudState()
+      ]);
+    } catch(e) {}
+  }
+
+  async fetchCloudOrders() {
+    let cloudOrders = [];
+
+    // 1. Try Firebase if configured
+    if (this.customFirebaseUrl) {
+      try {
+        const res = await safeCloudFetch(`${this.customFirebaseUrl}/orders.json`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && typeof data === 'object') {
+            cloudOrders = Array.isArray(data) ? data : Object.values(data);
+          }
+        }
+      } catch(e) {}
+    }
+
+    // 2. Try ntfy.sh cache buffer (recent 30 days)
+    if (cloudOrders.length === 0) {
+      try {
+        const res = await safeCloudFetch(`https://ntfy.sh/${this.ordersTopic}/json?poll=1&since=12h`);
+        if (res.ok) {
+          const text = await res.text();
+          const lines = text.trim().split('\n');
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            try {
+              const env = JSON.parse(line);
+              if (env.message) {
+                const parsed = JSON.parse(env.message);
+                if (parsed.orderId) cloudOrders.push(parsed);
+                else if (parsed.order && parsed.order.orderId) cloudOrders.push(parsed.order);
+              }
+            } catch(err) {}
+          }
+        }
+      } catch(e) {}
+    }
+
+    // 3. Merge with local orders
+    if (cloudOrders.length > 0) {
+      const mergedMap = new Map();
+      this.orders.forEach(o => { if (o && o.orderId) mergedMap.set(o.orderId, o); });
+      cloudOrders.forEach(o => {
+        if (o && o.orderId) {
+          if (!mergedMap.has(o.orderId)) {
+            mergedMap.set(o.orderId, o);
+          } else {
+            // Keep most up-to-date
+            const local = mergedMap.get(o.orderId);
+            const localTimelineLen = (local.timeline || []).length;
+            const cloudTimelineLen = (o.timeline || []).length;
+            if (cloudTimelineLen >= localTimelineLen) {
+              mergedMap.set(o.orderId, { ...local, ...o });
+            }
+          }
+        }
+      });
+      const merged = Array.from(mergedMap.values());
+      merged.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+      this.saveLocalOrders(merged);
+    }
+  }
+
+  async fetchCloudState() {
+    let cloudState = null;
+
+    // 1. Try Firebase if configured
+    if (this.customFirebaseUrl) {
+      try {
+        const res = await safeCloudFetch(`${this.customFirebaseUrl}/state.json`);
+        if (res && res.ok) {
+          const data = await res.json();
+          if (data && (data.brand || data.products || data.customTexts)) cloudState = data;
+        }
+      } catch(e) {}
+    }
+
+    // 2. Try free cloud KV store (kvdb.io)
+    if (!cloudState) {
+      try {
+        const res = await safeCloudFetch(`https://kvdb.io/4y9h8K5P7vG6jN3x2w/state_${this.storeId}`);
+        if (res && res.ok) {
+          const data = await res.json();
+          if (data && (data.brand || data.products || data.customTexts)) {
+            cloudState = data;
+          }
+        }
+      } catch(e) {}
+    }
+
+    // 3. Try ntfy.sh cache buffer for section updates
+    try {
+      const res = await safeCloudFetch(`https://ntfy.sh/${this.stateTopic}/json?poll=1&since=12h`);
+      if (res && res.ok) {
+        const text = await res.text();
+        const lines = text.trim().split('\n');
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const env = JSON.parse(line);
+            if (env.message) {
+              const parsed = JSON.parse(env.message);
+              if (parsed.type === 'SECTION_UPDATED' && parsed.section) {
+                if (!cloudState) cloudState = { ...(this.state || this.loadLocalState()) };
+                cloudState[parsed.section] = parsed.data;
+                cloudState.version = Math.max(cloudState.version || 0, parsed.version || 0);
+              } else if (parsed.type === 'STATE_UPDATED' && parsed.state) {
+                if (!cloudState || (parsed.version || 0) > (cloudState.version || 0)) {
+                  cloudState = parsed.state;
+                }
+              }
+            }
+          } catch(e) {}
+        }
+      }
+    } catch(e) {}
+
+    // If cloud has newer or complete state version
+    if (cloudState && (cloudState.version || 0) >= (this.state.version || 0)) {
+      this.state = cloudState;
+      this.saveLocalState(this.state);
+      if (this.store) {
+        this.store.state = this.state;
+        this.store.emit('LIVE_STATE_UPDATED', {
+          version: cloudState.version || Date.now(),
+          description: 'تزامن سحابي تلقائي',
+          state: this.state
+        });
+      }
+      if (window.lusterApp && typeof window.lusterApp.mount === 'function') {
+        window.lusterApp.mount();
+      }
+    }
+  }
+
+  // --- API HANDLER ---
+  async handleRequest(url, options = {}) {
+    const method = (options.method || 'GET').toUpperCase();
+    const cleanUrl = url.split('?')[0];
+
+    // Helper: Build response
+    const buildRes = (data, status = 200) => {
+      if (typeof Response !== 'undefined') {
+        return new Response(JSON.stringify(data), {
+          status,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      return {
+        ok: status >= 200 && status < 300,
+        status,
+        json: async () => data,
+        text: async () => JSON.stringify(data)
+      };
+    };
+
+    // 1. ORDERS ENDPOINTS
+    if (cleanUrl === '/api/orders') {
+      if (method === 'POST') {
+        const body = typeof options.body === 'string' ? JSON.parse(options.body) : (options.body || {});
+        const orderId = body.orderId || ('LUST-' + Math.floor(100000 + Math.random() * 900000));
+        const otpCode = body.otpCode || Math.floor(100000 + Math.random() * 900000).toString();
+        const total = Number(body.totalAmount) || 0;
+        const isPartial = !!body.isPartialPayment;
+        const deposit = isPartial ? Math.round(total * 0.2) : total;
+        const remaining = isPartial ? Math.round(total * 0.8) : 0;
+
+        const newOrder = {
+          orderId,
+          createdAt: body.createdAt || new Date().toISOString(),
+          items: body.items || [],
+          customer: body.customer || { name: 'عميل فاخر', phone: '01000000000', address: 'مصر' },
+          notes: body.notes || '',
+          totalAmount: total,
+          isPartialPayment: isPartial,
+          depositAmount: deposit,
+          remainingAmount: remaining,
+          paymentMethod: body.paymentMethod || 'cod',
+          transactionRef: body.transactionRef || null,
+          status: 'جديد',
+          statusCode: 'new',
+          statusEn: 'New Order',
+          otpCode,
+          otpExpiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+          otpVerified: false,
+          courierId: null,
+          courierName: null,
+          courierPhone: null,
+          timeline: [
+            {
+              status: 'جديد',
+              statusCode: 'new',
+              timestamp: new Date().toISOString(),
+              note: 'تم تسجيل الطلب وإصداره برمز تحقق مستقل'
+            }
+          ]
+        };
+
+        // Insert at beginning of local orders
+        this.orders.unshift(newOrder);
+        this.saveLocalOrders(this.orders);
+
+        // Broadcast to ntfy.sh
+        safeCloudFetch(`https://ntfy.sh/${this.ordersTopic}`, {
+          method: 'POST',
+          body: JSON.stringify({ type: 'NEW_ORDER', order: newOrder }),
+          headers: {
+            'Title': `👑 طلب ملكي جديد في LUSTER (#${newOrder.orderId})`,
+            'Tags': 'bell,moneybag',
+            'Priority': 'urgent',
+            'X-Cache': 'yes'
+          }
+        }).catch(() => {});
+
+        // Save to Firebase if configured
+        if (this.customFirebaseUrl) {
+          safeCloudFetch(`${this.customFirebaseUrl}/orders/${newOrder.orderId}.json`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newOrder)
+          }).catch(() => {});
+        }
+
+        return buildRes({ success: true, order: newOrder });
+      }
+
+      // GET /api/orders
+      try {
+        await Promise.race([
+          this.fetchCloudOrders(),
+          new Promise(resolve => setTimeout(resolve, 1200))
+        ]);
+      } catch(e) {}
+      return buildRes({ success: true, orders: this.orders });
+    }
+
+    // 2. ORDER STATUS UPDATE
+    if (cleanUrl === '/api/orders/status' && method === 'PUT') {
+      const body = typeof options.body === 'string' ? JSON.parse(options.body) : (options.body || {});
+      const ord = this.orders.find(o => o.orderId === body.orderId);
+      if (ord) {
+        ord.statusCode = body.statusCode;
+        const statusMap = {
+          new: 'جديد',
+          received: 'تم استلام الطلب',
+          preparing: 'جاري التجهيز بالمشغل الملكي',
+          shipped: 'في الطريق مع المندوب الملكي',
+          delivered: 'تم التسليم بنجاح',
+          cancelled: 'ملغي'
+        };
+        ord.status = statusMap[body.statusCode] || body.statusCode;
+        if (!ord.timeline) ord.timeline = [];
+        ord.timeline.push({
+          status: ord.status,
+          statusCode: body.statusCode,
+          timestamp: new Date().toISOString(),
+          note: body.reason || `تم تحديث حالة الطلب إلى: ${ord.status}`
+        });
+
+        // Mark as acknowledged on this device if owner confirmed receipt
+        if (body.statusCode === 'received') {
+          this.saveAcknowledgedOrder(ord.orderId);
+        }
+
+        this.saveLocalOrders(this.orders);
+
+        // Broadcast status update
+        safeCloudFetch(`https://ntfy.sh/${this.ordersTopic}`, {
+          method: 'POST',
+          body: JSON.stringify({
+            type: 'ORDER_STATUS_UPDATED',
+            orderId: ord.orderId,
+            statusCode: ord.statusCode,
+            status: ord.status,
+            order: ord
+          }),
+          headers: {
+            'Title': `تحديث حالة الطلب (#${ord.orderId}): ${ord.status}`,
+            'Tags': 'package',
+            'X-Cache': 'yes'
+          }
+        }).catch(() => {});
+
+        // Update in Firebase if configured
+        if (this.customFirebaseUrl) {
+          safeCloudFetch(`${this.customFirebaseUrl}/orders/${ord.orderId}.json`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(ord)
+          }).catch(() => {});
+        }
+
+        return buildRes({ success: true, order: ord });
+      }
+      return buildRes({ success: false, error: 'Order not found' }, 404);
+    }
+
+    // 3. ORDER COURIER ASSIGNMENT
+    if (cleanUrl === '/api/orders/courier' && method === 'PUT') {
+      const body = typeof options.body === 'string' ? JSON.parse(options.body) : (options.body || {});
+      const ord = this.orders.find(o => o.orderId === body.orderId);
+      if (ord) {
+        ord.courierId = body.courierId;
+        const couriers = this.state.couriers || [];
+        const cr = couriers.find(c => c.id === body.courierId);
+        if (cr) {
+          ord.courierName = cr.name;
+          ord.courierPhone = cr.phone;
+        }
+        if (!ord.timeline) ord.timeline = [];
+        ord.timeline.push({
+          status: ord.status,
+          statusCode: ord.statusCode,
+          timestamp: new Date().toISOString(),
+          note: `تم تعيين المندوب: ${ord.courierName || 'المندوب الملكي'}`
+        });
+        this.saveLocalOrders(this.orders);
+        return buildRes({ success: true, order: ord });
+      }
+      return buildRes({ success: false, error: 'Order not found' }, 404);
+    }
+
+    // 4. ORDER MODIFY
+    if (cleanUrl === '/api/orders/modify' && method === 'PUT') {
+      const body = typeof options.body === 'string' ? JSON.parse(options.body) : (options.body || {});
+      const ord = this.orders.find(o => o.orderId === body.orderId);
+      if (ord) {
+        ord.totalAmount = Number(body.totalAmount) || ord.totalAmount;
+        if (!ord.timeline) ord.timeline = [];
+        ord.timeline.push({
+          status: ord.status,
+          statusCode: ord.statusCode,
+          timestamp: new Date().toISOString(),
+          note: body.reason || `تم تعديل إجمالي الطلب إلى ${ord.totalAmount} ج.م`
+        });
+        this.saveLocalOrders(this.orders);
+        return buildRes({ success: true, order: ord });
+      }
+      return buildRes({ success: false, error: 'Order not found' }, 404);
+    }
+
+    // 5. STATE & SECTIONS
+    if (cleanUrl === '/api/state/section' && method === 'POST') {
+      const body = typeof options.body === 'string' ? JSON.parse(options.body) : (options.body || {});
+      const section = body.section;
+      const data = body.data;
+      if (!this.state) this.state = this.loadLocalState();
+      this.state[section] = data;
+      this.state.version = Date.now();
+      this.state.lastUpdated = new Date().toISOString();
+      this.saveLocalState(this.state);
+
+      // 1. Broadcast over ntfy.sh: if payload < 3500 bytes send direct data, else send STATE_REVISION signal
+      const directPayload = JSON.stringify({
+        type: 'SECTION_UPDATED',
+        section,
+        data,
+        version: this.state.version,
+        description: body.description || `حفظ قسم: ${section}`
+      });
+
+      const ntfyBody = directPayload.length < 3500 ? directPayload : JSON.stringify({
+        type: 'STATE_REVISION',
+        version: this.state.version,
+        section,
+        description: body.description || `تحديث قسم: ${section}`
+      });
+
+      safeCloudFetch(`https://ntfy.sh/${this.stateTopic}`, {
+        method: 'POST',
+        body: ntfyBody,
+        headers: {
+          'Title': `تحديث متجر LUSTER الملكي (${section})`,
+          'Tags': 'sparkles',
+          'X-Cache': 'yes'
+        }
+      }).catch(() => {});
+
+      // 2. Persist full state to free public CORS key-value database (kvdb.io up to 2MB)
+      safeCloudFetch(`https://kvdb.io/4y9h8K5P7vG6jN3x2w/state_${this.storeId}`, {
+        method: 'POST',
+        body: JSON.stringify(this.state)
+      }).catch(() => {});
+
+      // 3. Save to Firebase if configured
+      if (this.customFirebaseUrl) {
+        safeCloudFetch(`${this.customFirebaseUrl}/state/${section}.json`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        }).catch(() => {});
+        safeCloudFetch(`${this.customFirebaseUrl}/state/version.json`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(this.state.version)
+        }).catch(() => {});
+      }
+
+      return buildRes({ success: true, version: this.state.version });
+    }
+
+    // 6. FULL STATE FETCH & PUBLISH
+    if (cleanUrl === '/api/state') {
+      await this.fetchCloudState();
+      return buildRes(this.state);
+    }
+
+    if (cleanUrl === '/api/publish' && method === 'POST') {
+      const body = typeof options.body === 'string' ? JSON.parse(options.body) : (options.body || {});
+      const targetState = body.state || this.state;
+      targetState.version = Date.now();
+      targetState.lastUpdated = new Date().toISOString();
+      this.state = targetState;
+      this.saveLocalState(this.state);
+
+      safeCloudFetch(`https://ntfy.sh/${this.stateTopic}`, {
+        method: 'POST',
+        body: JSON.stringify({
+          type: 'STATE_UPDATED',
+          version: this.state.version,
+          description: body.description || 'نشر تعديلات LUSTER Studio الملكية',
+          state: this.state
+        }),
+        headers: {
+          'Title': 'نشر متجر LUSTER الملكي لكافة الزوار',
+          'Tags': 'rocket',
+          'X-Cache': 'yes'
+        }
+      }).catch(() => {});
+
+      if (this.customFirebaseUrl) {
+        safeCloudFetch(`${this.customFirebaseUrl}/state.json`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(this.state)
+        }).catch(() => {});
+      }
+
+      return buildRes({ success: true, version: this.state.version });
+    }
+
+    // 7. PRODUCTS & OTHER GETS
+    if (cleanUrl === '/api/products') {
+      return buildRes({ success: true, products: this.state.products || [] });
+    }
+
+    if (cleanUrl === '/api/version') {
+      return buildRes({ version: this.state.version || 12 });
+    }
+
+    if (cleanUrl === '/api/couriers') {
+      if (method === 'POST') {
+        const body = typeof options.body === 'string' ? JSON.parse(options.body) : (options.body || {});
+        if (!this.state.couriers) this.state.couriers = [];
+        const newCourier = { id: 'cour_' + Date.now(), active: true, ...body };
+        this.state.couriers.push(newCourier);
+        this.saveSection('couriers', this.state.couriers, 'إضافة مندوب');
+        return buildRes({ success: true, courier: newCourier });
+      }
+      return buildRes({ success: true, couriers: this.state.couriers || [] });
+    }
+
+    if (cleanUrl === '/api/customers') {
+      if (method === 'POST') {
+        const body = typeof options.body === 'string' ? JSON.parse(options.body) : (options.body || {});
+        if (!this.state.customers) this.state.customers = [];
+        this.state.customers.push(body);
+        this.saveSection('customers', this.state.customers, 'إضافة عميل');
+        return buildRes({ success: true });
+      }
+      return buildRes({ success: true, customers: this.state.customers || [] });
+    }
+
+    if (cleanUrl.startsWith('/api/financial/')) {
+      const sub = cleanUrl.replace('/api/financial/', '');
+      if (method === 'POST') {
+        const body = typeof options.body === 'string' ? JSON.parse(options.body) : (options.body || {});
+        if (!this.state.financial) this.state.financial = {};
+        if (!this.state.financial[sub]) this.state.financial[sub] = [];
+        this.state.financial[sub].push(body);
+        this.saveSection('financial', this.state.financial, `حفظ مالي: ${sub}`);
+        return buildRes({ success: true });
+      }
+      return buildRes({ success: true, [sub]: (this.state.financial && this.state.financial[sub]) || [] });
+    }
+
+    // Default fallback
+    return buildRes({ success: true });
+  }
+
+  // Helper: Hook into live stream
+  subscribeLiveUpdates(cb) {
+    if (typeof cb === 'function') {
+      this.liveSubscribers.add(cb);
+    }
+  }
+}
+
+// Global Virtual Fetch Hook
+const _systemNativeFetch = (typeof window !== 'undefined' && window.fetch) ? window.fetch.bind(window) : (typeof globalThis !== 'undefined' && globalThis.fetch ? globalThis.fetch.bind(globalThis) : null);
+
+const safeCloudFetch = async (url, opts = {}) => {
+  if (typeof _systemNativeFetch === 'function') {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2000);
+      const mergedOpts = {
+        ...opts,
+        signal: (opts && opts.signal) || controller.signal
+      };
+      const res = await _systemNativeFetch(url, mergedOpts);
+      clearTimeout(timeoutId);
+      return res;
+    } catch(err) {
+      return null;
+    }
+  }
+  return null;
+};
+
+if (typeof window !== 'undefined') {
+  window.lusterCloudBridge = new LusterCloudBridge();
+
+  const customFetch = async function(resource, options = {}) {
+    const url = typeof resource === 'string' ? resource : (resource ? resource.url : '');
+
+    if (url && (url.startsWith('/api/') || url.includes('/api/'))) {
+      if (window.location && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+        try {
+          const directRes = await _systemNativeFetch(resource, options);
+          if (directRes && directRes.status !== 404) return directRes;
+        } catch(e) {}
+      }
+      return await window.lusterCloudBridge.handleRequest(url, options);
+    }
+
+    return (typeof _systemNativeFetch === 'function') ? _systemNativeFetch(resource, options) : Promise.reject(new Error('Fetch unavailable'));
+  };
+
+  window.fetch = customFetch;
+  if (typeof globalThis !== 'undefined') {
+    globalThis.fetch = customFetch;
+  }
+}
+
 // LUSTER Visual Commerce - Client State & Persistence Engine
 // Real-time synchronization via Server-Sent Events (SSE) + LocalStorage Offline Support
 
@@ -6533,10 +7613,8 @@ class LusterStore {
 
   connectLiveUpdates() {
     try {
-      const evtSource = new EventSource('/api/live-stream');
-      evtSource.onmessage = (event) => {
-        try {
-          const payload = JSON.parse(event.data);
+      if (window.lusterCloudBridge) {
+        window.lusterCloudBridge.subscribeLiveUpdates((payload) => {
           if (payload.type === 'STATE_UPDATED' && payload.state) {
             this.state = payload.state;
             this.saveLocal('luster_cached_state', this.state);
@@ -6547,16 +7625,13 @@ class LusterStore {
             });
           } else if (payload.type === 'NEW_ORDER') {
             this.emit('NEW_ORDER_BROADCAST', payload);
+          } else if (payload.type === 'ORDER_STATUS_UPDATED') {
+            this.emit('ORDER_STATUS_UPDATED', payload);
           }
-        } catch (err) {
-          console.error('Error handling SSE payload:', err);
-        }
-      };
-      evtSource.onerror = () => {
-        // Will auto reconnect
-      };
+        });
+      }
     } catch (e) {
-      console.warn('SSE not supported or connection error:', e);
+      console.warn('Live stream connection warning:', e);
     }
   }
 
@@ -7560,6 +8635,17 @@ class CommerceEngine {
 
         const data = await res.json();
         if (data.success) {
+          // Immediately record in local storage so customer sees their tracking instantly in 0ms!
+          try {
+            const localOrders = JSON.parse(localStorage.getItem('luster_orders') || '[]');
+            if (!localOrders.some(o => o.orderId === data.order.orderId)) {
+              localOrders.unshift(data.order);
+              localStorage.setItem('luster_orders', JSON.stringify(localOrders));
+            }
+            localStorage.setItem('luster_last_order', JSON.stringify(data.order));
+            if (cleanPhone) localStorage.setItem('luster_customer_phone', cleanPhone);
+          } catch(e) {}
+
           // Award loyalty points
           const earnedPts = Math.round(total / 10);
           this.store.addPoints(earnedPts, `نقاط مكتسبة عن طلب رقم ${data.order.orderId}`);
@@ -7658,41 +8744,144 @@ class CommerceEngine {
   // Customer Order Center & Real-Time Tracking & Smart Reorder
   async renderOrdersCenter(containerEl) {
     if (!containerEl) return;
-    containerEl.innerHTML = '<div style="text-align:center; padding:30px; color:var(--accent-gold);">جارٍ تحميل سجل الطلبات الملكية...</div>';
 
+    // 1. Instantly load all known local orders (0ms Latency - No blocking loader!)
     let orders = [];
     try {
-      const res = await fetch('/api/orders');
-      if (res.ok) {
-        const data = await res.json();
-        orders = data.orders || [];
-      }
-    } catch (e) {
-      console.warn('Orders fetch error, loading local orders:', e);
-    }
+      const localOrders = JSON.parse(localStorage.getItem('luster_orders') || '[]');
+      if (Array.isArray(localOrders)) orders = [...localOrders];
+    } catch (e) {}
 
     try {
-      const localOrders = JSON.parse(localStorage.getItem('luster_orders') || '[]');
-      localOrders.forEach(lo => {
-        if (!orders.some(o => o.orderId === lo.orderId)) {
-          orders.push(lo);
+      const lastOrd = JSON.parse(localStorage.getItem('luster_last_order') || 'null');
+      if (lastOrd && lastOrd.orderId && !orders.some(o => o.orderId === lastOrd.orderId)) {
+        orders.unshift(lastOrd);
+      }
+    } catch (e) {}
+
+    if (window.lusterCloudBridge && Array.isArray(window.lusterCloudBridge.orders)) {
+      window.lusterCloudBridge.orders.forEach(co => {
+        if (co && co.orderId && !orders.some(o => o.orderId === co.orderId)) {
+          orders.push(co);
         }
       });
-    } catch (e) {}
+    }
 
     orders.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
 
-    if (orders.length === 0) {
-      containerEl.innerHTML = `
-        <div style="text-align:center; padding:50px 20px;">
-          <div style="font-size:50px; margin-bottom:16px;">📦</div>
-          <h3 style="color:var(--text-primary); font-size:18px; font-weight:900; margin-bottom:8px;">لا توجد طلبات سابقة مسجلة حتى الآن</h3>
-          <p style="color:var(--text-muted); font-size:13px; max-width:320px; margin:0 auto 24px;">لم تقم بإتمام أي طلبات بعد. تصفح مقتنيات LUSTER الملكية واختر قطعتك الاستثنائية الآن.</p>
-          <button id="btn-orders-explore" class="btn-luxury-gold" style="padding:12px 24px; font-size:14px;">
-            ✦ استكشف المجموعات الملكية
+    // 2. Render the Orders Center DOM IMMEDIATELY in 0ms!
+    this._renderOrdersCenterDOM(containerEl, orders);
+
+    // 3. Silently fetch cloud updates in background without wiping out the DOM or blocking the user!
+    if (typeof window !== 'undefined' && window.location && window.location.protocol && window.location.protocol.startsWith('http')) {
+      const abortCtrl = new AbortController();
+      const timeoutId = setTimeout(() => abortCtrl.abort(), 2500);
+      fetch('/api/orders', { signal: abortCtrl.signal })
+        .then(r => r.json())
+        .then(data => {
+          clearTimeout(timeoutId);
+          if (data && Array.isArray(data.orders) && data.orders.length > 0) {
+            let hasChanges = false;
+            data.orders.forEach(co => {
+              const idx = orders.findIndex(o => o.orderId === co.orderId);
+              if (idx !== -1) {
+                if (orders[idx].statusCode !== co.statusCode || orders[idx].courierName !== co.courierName) {
+                  orders[idx] = { ...orders[idx], ...co };
+                  hasChanges = true;
+                }
+              } else {
+                orders.push(co);
+                hasChanges = true;
+              }
+            });
+            if (hasChanges) {
+              orders.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+              try { localStorage.setItem('luster_orders', JSON.stringify(orders)); } catch(e) {}
+              const drawer = document.getElementById('drawer-orders');
+              if (drawer && drawer.classList.contains('active')) {
+                this._renderOrdersCenterDOM(containerEl, orders);
+              }
+            }
+          }
+        })
+        .catch(() => { clearTimeout(timeoutId); });
+    }
+  }
+
+  _renderOrdersCenterDOM(containerEl, orders = []) {
+
+    // Live Search Filter by Phone or Order ID (Multi-Device Accessible)
+    let filterQuery = (containerEl.dataset.filterQuery || '').trim();
+    let displayedOrders = orders;
+    if (filterQuery) {
+      const qLower = filterQuery.toLowerCase();
+      displayedOrders = orders.filter(o => {
+        const p = (o.customer?.phone || '').replace(/\s+/g, '');
+        const id = (o.orderId || '').toLowerCase();
+        return p.includes(qLower) || id.includes(qLower);
+      });
+    }
+
+    const state = this.store.getState();
+    const phoneMgr = state.phoneManager || { numbers: [] };
+    const waNumber = (phoneMgr.numbers || []).find(n => n.visible && n.purposes && n.purposes.includes('whatsapp'))?.number || '01013376681';
+
+    let searchHeaderHtml = `
+      <div style="background:var(--bg-secondary); border:1.5px solid var(--accent-gold); border-radius:var(--radius-sm); padding:14px; margin-bottom:16px;">
+        <label style="font-size:12px; font-weight:800; color:var(--accent-gold); display:block; margin-bottom:6px;">
+          🔍 تتبع شحنتك لحظياً برقم الهاتف أو رقم الطلب (متاح من أي هاتف):
+        </label>
+        <div style="display:flex; gap:8px;">
+          <input type="text" id="track-order-search-input" value="${filterQuery}" placeholder="أدخل رقم هاتفك أو كود الطلب (مثل LUST-123456)..."
+                 style="flex:1; padding:9px 12px; background:var(--bg-card); color:#FFF; border:1px solid var(--border-subtle); border-radius:var(--radius-sm); font-size:12px; font-weight:800;">
+          <button id="btn-do-track-search" class="btn-luxury-gold" style="padding:9px 16px; font-size:12px; font-weight:900;">
+            بحث
           </button>
+          ${filterQuery ? `<button id="btn-clear-track-search" class="header-btn" style="padding:9px 12px; font-size:12px;">إلغاء</button>` : ''}
+        </div>
+      </div>
+    `;
+
+    if (orders.length === 0 || displayedOrders.length === 0) {
+      containerEl.innerHTML = `
+        <div style="display:flex; flex-direction:column; gap:16px; padding:4px 0;">
+          ${searchHeaderHtml}
+          <div style="text-align:center; padding:30px 20px; background:var(--bg-secondary); border-radius:var(--radius-md); border:1px solid var(--border-subtle);">
+            <div style="font-size:46px; margin-bottom:12px;">📦</div>
+            <h3 style="color:var(--text-primary); font-size:16px; font-weight:900; margin-bottom:6px;">
+              ${filterQuery ? 'لم يتم العثور على طلبات مطابقة لهذا البحث' : 'لا توجد طلبات سابقة مسجلة حتى الآن'}
+            </h3>
+            <p style="color:var(--text-muted); font-size:12px; max-width:320px; margin:0 auto 20px;">
+              ${filterQuery ? 'تأكد من كتابة رقم الهاتف أو كود الطلب بشكل صحيح كما تم إدخاله أثناء الشراء.' : 'تفضل باستكشاف تشكيلة LUSTER الملكية والطلب لتظهر شحنتك فوراً هنا.'}
+            </p>
+            <button id="btn-orders-explore" class="btn-luxury-gold" style="padding:10px 20px; font-size:13px;">
+              ✦ استكشف المجموعات الملكية
+            </button>
+          </div>
         </div>
       `;
+
+      const searchBtn = containerEl.querySelector('#btn-do-track-search');
+      const searchInput = containerEl.querySelector('#track-order-search-input');
+      const clearBtn = containerEl.querySelector('#btn-clear-track-search');
+      if (searchBtn && searchInput) {
+        searchBtn.onclick = () => {
+          containerEl.dataset.filterQuery = searchInput.value.trim();
+          this.renderOrdersCenter(containerEl);
+        };
+        searchInput.onkeydown = (e) => {
+          if (e.key === 'Enter') {
+            containerEl.dataset.filterQuery = searchInput.value.trim();
+            this.renderOrdersCenter(containerEl);
+          }
+        };
+      }
+      if (clearBtn) {
+        clearBtn.onclick = () => {
+          containerEl.dataset.filterQuery = '';
+          this.renderOrdersCenter(containerEl);
+        };
+      }
       const exploreBtn = containerEl.querySelector('#btn-orders-explore');
       if (exploreBtn) {
         exploreBtn.onclick = () => {
@@ -7704,12 +8893,11 @@ class CommerceEngine {
       return;
     }
 
-    const state = this.store.getState();
-    const phoneMgr = state.phoneManager || { numbers: [] };
-    const waNumber = (phoneMgr.numbers || []).find(n => n.visible && n.purposes && n.purposes.includes('whatsapp'))?.number || '01013376681';
+    // state, phoneMgr, waNumber are already declared above
 
     let html = `
       <div style="display:flex; flex-direction:column; gap:16px; padding:4px 0;">
+        ${searchHeaderHtml}
         <div style="background:rgba(212,175,55,0.08); border:1px solid var(--border-subtle); border-radius:var(--radius-sm); padding:12px; font-size:12px; color:var(--text-secondary);">
           ✦ مرحبًا بك في مركز متابعة الشحنات الملكية. يمكنك تتبع خط سير شحنتك لحظيًا وإعادة طلب مقتنياتك المفضلة بنقرة واحدة.
         </div>
@@ -7928,9 +9116,19 @@ class ExperienceEngine {
 
       <!-- Video / Motion Canvas -->
       <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:#000; overflow:hidden;">
-        ${story.videoUrl ? `
-          <video id="active-story-video" src="${story.videoUrl}" autoplay playsinline loop controls style="width:100%; height:100%; object-fit:cover;"></video>
-        ` : `
+        ${story.videoUrl ? (
+          (story.videoUrl.includes('drive.google.com') || story.videoUrl.includes('youtube.com')) ? `
+            <iframe id="active-story-iframe" src="${formatVideoUrlForStreaming(story.videoUrl)}" style="width:100%; height:100%; border:none;" allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe>
+          ` : `
+            <div class="story-video-container" style="position:relative; width:100%; height:100%;">
+              <video id="active-story-video" src="${story.videoUrl}" playsinline webkit-playsinline loop controls style="width:100%; height:100%; object-fit:cover;"></video>
+              <button type="button" class="btn-video-sound-toggle" onclick="window.toggleVideoSound(this, event)" style="position:absolute; top:20px; left:20px; z-index:30; background:rgba(10,10,14,0.85); border:1.5px solid var(--accent-gold); color:var(--accent-gold); border-radius:var(--radius-pill); padding:6px 14px; font-size:12px; font-weight:800; cursor:pointer; display:flex; align-items:center; gap:6px; box-shadow:0 4px 15px rgba(0,0,0,0.6);">
+                <span class="sound-icon">🔊</span>
+                <span class="sound-text">تشغيل الصوت</span>
+              </button>
+            </div>
+          `
+        ) : `
           <div style="width:70%; height:70%; opacity:0.9; animation:lusterLetterBounce 2s infinite ease-in-out;">
             <div style="font-size:70px; text-align:center;">🎬</div>
             <div style="font-size:16px; font-weight:900; color:var(--accent-gold-light); text-align:center; margin-top:14px;">
@@ -7965,18 +9163,48 @@ class ExperienceEngine {
       if (activeBar) activeBar.style.width = '100%';
     }, 50);
 
-    // Auto advance after duration
+    // Auto advance based on real video playback (Supports any duration: 10s, 1m, 5m, 10m+)
     clearTimeout(this.storyTimer);
-    this.storyTimer = setTimeout(() => {
-      if (this.currentStoryIndex < totalStories - 1) {
-        this.openStory(this.currentStoryIndex + 1);
-      } else {
-        this.closeStory();
-      }
-    }, story.durationSeconds * 1000);
+    const videoEl = container.querySelector('#active-story-video');
+
+    if (videoEl) {
+      // Listen to video ended event to advance only when video finishes naturally
+      videoEl.onended = () => {
+        if (this.currentStoryIndex < totalStories - 1) {
+          this.openStory(this.currentStoryIndex + 1);
+        } else {
+          this.closeStory();
+        }
+      };
+
+      // Smooth progress bar bound to actual playback time
+      videoEl.ontimeupdate = () => {
+        const activeBar = container.querySelector(`#story-progress-${this.currentStoryIndex}`);
+        if (activeBar && videoEl.duration > 0) {
+          const pct = Math.min(100, (videoEl.currentTime / videoEl.duration) * 100);
+          activeBar.style.width = pct + '%';
+        }
+      };
+
+      videoEl.onloadedmetadata = () => {
+        const activeBar = container.querySelector(`#story-progress-${this.currentStoryIndex}`);
+        if (activeBar) {
+          activeBar.style.transition = 'width 0.2s linear';
+        }
+      };
+    } else {
+      // Static image fallback timer
+      const staticDuration = (story.durationSeconds && story.durationSeconds >= 10) ? story.durationSeconds : 15;
+      this.storyTimer = setTimeout(() => {
+        if (this.currentStoryIndex < totalStories - 1) {
+          this.openStory(this.currentStoryIndex + 1);
+        } else {
+          this.closeStory();
+        }
+      }, staticDuration * 1000);
+    }
 
     // Sound Control & Audio Playback Enforcement
-    const videoEl = container.querySelector('#active-story-video');
     const soundBtn = container.querySelector('#btn-story-sound');
     const soundIcon = container.querySelector('#story-sound-icon');
     const soundText = container.querySelector('#story-sound-text');
@@ -8722,10 +9950,31 @@ class LusterStudio {
     saveBtn.onclick = async () => {
       const state = this.store.getState();
 
-      if (elementType === 'text' && elementKey) {
-        if (elementKey.startsWith('hero.')) {
+      if (elementType === 'text') {
+        const textVal = body.querySelector('#insp-text-content')?.value;
+        const colorVal = body.querySelector('#insp-text-color')?.value;
+        const fontVal = body.querySelector('#insp-font-size')?.value;
+
+        const regItem = typeof DEFAULT_TEXT_REGISTRY !== 'undefined' ? DEFAULT_TEXT_REGISTRY.find(r => r.key === elementKey || r.id === elementKey || (r.selector && this.activeElement && this.activeElement.matches && this.activeElement.matches(r.selector))) : null;
+        const targetId = regItem ? regItem.id : (elementKey || 'text_' + Date.now());
+
+        if (this.store && typeof this.store.saveTextCustomization === 'function') {
+          this.store.saveTextCustomization(targetId, {
+            text: textVal,
+            color: colorVal,
+            fontSize: fontVal,
+            visible: true
+          });
+          if (typeof applyTextCustomizations === 'function') {
+            applyTextCustomizations(this.store);
+          }
+          await this.store.saveSection('customTexts', this.store.getState().customTexts, `تعديل نص ${targetId}`);
+          window.showToast('✓ تم حفظ النص وتحديثه سحابياً لدى العملاء!', 'success');
+        }
+
+        if (elementKey && elementKey.startsWith('hero.') && state.hero) {
           const field = elementKey.replace('hero.', '');
-          state.hero[field] = textInput.value;
+          state.hero[field] = textVal;
           await this.store.saveSection('hero', state.hero, `تعديل نص الافتتاحية: ${field}`);
         }
       } else if (elementType === 'logo') {
@@ -9663,7 +10912,7 @@ class LusterStudio {
 
     const saveBtn = body.querySelector('#btn-save-lighting');
     if (saveBtn) {
-      saveBtn.onclick = () => {
+      saveBtn.onclick = async () => {
         const lightingSettings = {
           glow: parseInt(glowSlider.value, 10),
           shadow: parseInt(shadowSlider.value, 10),
@@ -9676,7 +10925,12 @@ class LusterStudio {
         Object.assign(state.lighting, lightingSettings);
         this.store.saveLocal('luster_cached_state', state);
 
-        window.showToast('✓ تم حفظ وتطبيق إعدادات الإضاءة الملكية بنجاح!', 'success');
+        if (typeof applyLightingSettings === 'function') {
+          applyLightingSettings(lightingSettings);
+        }
+
+        await this.store.saveSection('lighting', state.lighting, 'تحديث وتثبيت إعدادات الإضاءة والمؤثرات الملكية');
+        window.showToast('✓ تم حفظ وتطبيق إعدادات الإضاءة الملكية ومزامنتها بنجاح!', 'success');
         modal.classList.remove('active');
       };
     }
@@ -9731,13 +10985,40 @@ class LusterStudio {
       </div>
     `;
 
-    body.querySelectorAll('.btn-edit-content').forEach(b => {
-      b.onclick = () => {
-        const newText = prompt('أدخل النص العربي الجديد:');
-        if (newText) {
-          window.showToast('تم تحديث النص وحفظه بنجاح!', 'success');
+    body.querySelectorAll('.btn-edit-content').forEach((b, idx) => {
+      b.onclick = async () => {
+        const item = contentItems[idx];
+        if (!item) return;
+        const currentCustom = (this.store.getState()?.customTexts || {})[item.id]?.text;
+        const newText = prompt(`أدخل النص العربي الجديد لـ (${item.ar}):`, currentCustom || item.ar);
+        if (newText !== null && newText.trim()) {
+          this.store.saveTextCustomization(item.id, {
+            text: newText.trim(),
+            labelAr: item.ar,
+            visible: true
+          });
+          applyTextCustomizations(this.store);
+          await this.store.saveSection('customTexts', this.store.getState().customTexts, `تعديل نص: ${item.id}`);
+          window.showToast('✓ تم تحديث وحفظ النص سحابياً لجميع العملاء!', 'success');
           this.openContentManagerModal();
         }
+      };
+    });
+
+    body.querySelectorAll('.btn-toggle-vis').forEach((b, idx) => {
+      b.onclick = async () => {
+        const item = contentItems[idx];
+        if (!item) return;
+        const currentCustom = (this.store.getState()?.customTexts || {})[item.id] || {};
+        const isVis = currentCustom.visible !== false;
+        this.store.saveTextCustomization(item.id, {
+          ...currentCustom,
+          visible: !isVis
+        });
+        applyTextCustomizations(this.store);
+        await this.store.saveSection('customTexts', this.store.getState().customTexts, `تغيير ظهور نص: ${item.id}`);
+        window.showToast(isVis ? 'تم إخفاء النص عن العملاء' : 'تم إظهار النص للعملاء', 'info');
+        this.openContentManagerModal();
       };
     });
 
@@ -9803,7 +11084,7 @@ class LusterStudio {
     const saveBtn = body.querySelector('#btn-save-cart-settings');
     const modeSelect = body.querySelector('#cart-motion-mode');
     if (saveBtn && modeSelect) {
-      saveBtn.onclick = () => {
+      saveBtn.onclick = async () => {
         const selectedMode = modeSelect.value;
         localStorage.setItem('luster_cart_motion_mode', selectedMode);
         const state = this.store.getState();
@@ -9811,13 +11092,12 @@ class LusterStudio {
         state.cartSettings.mode = selectedMode;
         this.store.saveLocal('luster_cached_state', state);
 
-        const dockBar = document.getElementById('luster-dock-bar');
-        if (dockBar) {
-          dockBar.classList.remove('dock-gentle', 'dock-static', 'floating-bubble');
-          dockBar.classList.add(selectedMode);
+        if (typeof applyCartSettings === 'function') {
+          applyCartSettings({ mode: selectedMode });
         }
 
-        window.showToast('✓ تم حفظ وتطبيق نمط حركة السلة الجديد بنجاح!', 'success');
+        await this.store.saveSection('cartSettings', state.cartSettings, 'تحديث نمط حركة السلة: ' + selectedMode);
+        window.showToast('✓ تم حفظ وتطبيق ونشر نمط حركة السلة: ' + selectedMode, 'success');
         modal.classList.remove('active');
       };
     }
@@ -10774,6 +12054,7 @@ class OwnerAlarmEngine {
     this.isMuted = false;
     this.audioEl = null;
     this.wakeLock = null;
+    this.activeNodes = null;
     this.initAudioElement();
     this.initCrossTabListener();
   }
@@ -10794,11 +12075,13 @@ class OwnerAlarmEngine {
     const isOwnerAuth = this.ownerDashboard && this.ownerDashboard.isAuthenticated;
     const guardOverlay = document.getElementById('luster-guard-standby-overlay');
     const isGuardActive = guardOverlay && guardOverlay.style.display === 'flex';
+    const isOwnerDevice = localStorage.getItem('luster_is_owner_device') === 'true';
 
-    // STRICT ISOLATION: The alarm and emergency banner are ONLY permitted
-    // inside the Owner Dashboard modal when actively open, or inside the Standby Guard Screen!
-    // They are 100% FORBIDDEN on the customer store page!
-    return Boolean((isModalActive && isOwnerAuth) || isGuardActive);
+    // STRICT ISOLATION & RELIABILITY:
+    // Permit alarm if in Standby Guard Screen, or if Owner Modal is open and authenticated,
+    // or if this device has been authenticated as an Owner Device!
+    // Customer devices are never marked as owner devices and will never sound the alarm.
+    return Boolean(isGuardActive || (isModalActive && isOwnerAuth) || (isOwnerAuth && isOwnerDevice));
   }
 
   initAudioElement() {
@@ -10950,10 +12233,85 @@ class OwnerAlarmEngine {
     this.isPlaying = true;
     this.initAudio();
 
-    // 1. Play first emergency burst immediately
-    this.playEmergencyBurst();
+    // 1. Continuous High-Volume Dual-Tone Web Audio Siren (Uninterrupted & Piercing)
+    try {
+      if (this.audioCtx) {
+        if (this.audioCtx.state === 'suspended') {
+          this.audioCtx.resume().catch(() => {});
+        }
+        const now = this.audioCtx.currentTime;
 
-    // 2. Play continuous HTML5 Audio element loop
+        // Dynamics Compressor for high volume without clipping
+        const compressor = this.audioCtx.createDynamicsCompressor();
+        compressor.threshold.setValueAtTime(-14, now);
+        compressor.knee.setValueAtTime(0, now);
+        compressor.ratio.setValueAtTime(20, now);
+        compressor.attack.setValueAtTime(0.001, now);
+        compressor.release.setValueAtTime(0.05, now);
+        compressor.connect(this.audioCtx.destination);
+
+        // High-Gain Output Boost for maximum acoustic loudness
+        const masterGain = this.audioCtx.createGain();
+        masterGain.gain.setValueAtTime(2.4, now);
+        masterGain.connect(compressor);
+
+        // Primary Piercing Siren Oscillator (Sawtooth)
+        const osc1 = this.audioCtx.createOscillator();
+        osc1.type = 'sawtooth';
+        osc1.frequency.setValueAtTime(1150, now);
+
+        // Secondary Harmonic Rich Oscillator (Square)
+        const osc2 = this.audioCtx.createOscillator();
+        osc2.type = 'square';
+        osc2.frequency.setValueAtTime(850, now);
+
+        // Continuous LFO for non-stop smooth frequency sweep (No silence, no gaps)
+        const lfo = this.audioCtx.createOscillator();
+        lfo.type = 'triangle';
+        lfo.frequency.setValueAtTime(2.8, now); // Sweeps 2.8 times per second non-stop
+
+        const lfoGain1 = this.audioCtx.createGain();
+        lfoGain1.gain.setValueAtTime(550, now); // Sweeps osc1: 600Hz - 1700Hz
+        lfo.connect(lfoGain1);
+        lfoGain1.connect(osc1.frequency);
+
+        const lfoGain2 = this.audioCtx.createGain();
+        lfoGain2.gain.setValueAtTime(450, now); // Sweeps osc2: 400Hz - 1300Hz
+        lfo.connect(lfoGain2);
+        lfoGain2.connect(osc2.frequency);
+
+        const gain1 = this.audioCtx.createGain();
+        gain1.gain.setValueAtTime(0.9, now);
+        osc1.connect(gain1);
+        gain1.connect(masterGain);
+
+        const gain2 = this.audioCtx.createGain();
+        gain2.gain.setValueAtTime(0.8, now);
+        osc2.connect(gain2);
+        gain2.connect(masterGain);
+
+        // Continuous non-stop start
+        osc1.start(now);
+        osc2.start(now);
+        lfo.start(now);
+
+        this.activeNodes = {
+          osc1,
+          osc2,
+          lfo,
+          lfoGain1,
+          lfoGain2,
+          gain1,
+          gain2,
+          masterGain,
+          compressor
+        };
+      }
+    } catch(err) {
+      console.warn('Continuous siren audio error:', err);
+    }
+
+    // 2. Play continuous HTML5 Audio element loop for lockscreen support
     if (this.audioEl) {
       this.audioEl.volume = 1.0;
       this.audioEl.currentTime = 0;
@@ -10968,7 +12326,7 @@ class OwnerAlarmEngine {
             title: '🚨 إنذار طلب جديد في المتجر!',
             artist: 'LUSTER Store Manager',
             album: 'طلبات العملاء الحية',
-            artwork: [{ src: '/assets/icon-192.png', sizes: '192x192', type: 'image/png' }]
+            artwork: [{ src: './assets/icon-192.png', sizes: '192x192', type: 'image/png' }]
           });
           navigator.mediaSession.playbackState = 'playing';
           navigator.mediaSession.setActionHandler('play', () => { if (this.audioEl) this.audioEl.play().catch(()=>{}); });
@@ -10978,17 +12336,19 @@ class OwnerAlarmEngine {
       }
     }
 
-    // 3. Repeating alarm loop
+    // 3. Heartbeat keeper to ensure audio remains alive until order received
     this.intervalId = setInterval(() => {
       if (!this.isPlaying) {
         clearInterval(this.intervalId);
         return;
       }
-      this.playEmergencyBurst();
+      if (this.audioCtx && this.audioCtx.state === 'suspended') {
+        this.audioCtx.resume().catch(() => {});
+      }
       if (this.audioEl && this.audioEl.paused) {
         this.audioEl.play().catch(() => {});
       }
-    }, 450);
+    }, 1500);
 
     // 4. Intense mobile hardware vibration pattern
     const triggerVibe = () => {
@@ -11091,6 +12451,19 @@ class OwnerAlarmEngine {
     }
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
       navigator.vibrate(0);
+    }
+    // Cleanly stop and disconnect continuous Web Audio siren
+    if (this.activeNodes) {
+      try {
+        if (this.activeNodes.osc1) this.activeNodes.osc1.stop();
+        if (this.activeNodes.osc2) this.activeNodes.osc2.stop();
+        if (this.activeNodes.lfo) this.activeNodes.lfo.stop();
+        if (this.activeNodes.gain1) this.activeNodes.gain1.disconnect();
+        if (this.activeNodes.gain2) this.activeNodes.gain2.disconnect();
+        if (this.activeNodes.masterGain) this.activeNodes.masterGain.disconnect();
+        if (this.activeNodes.compressor) this.activeNodes.compressor.disconnect();
+      } catch(e) {}
+      this.activeNodes = null;
     }
     if (this.audioEl) {
       if (typeof this.audioEl.pause === 'function') this.audioEl.pause();
@@ -11301,6 +12674,7 @@ class LusterOwnerDashboard {
       if (pin === activePin || pin === '2222' || pin === '0846') {
         this.isAuthenticated = true;
         sessionStorage.setItem('luster_owner_authenticated', 'true');
+        this.alarmEngine.markAsOwnerDevice(true);
         overlay.style.display = 'none';
         window.showToast('تم التحقق بنجاح! مرحبًا بك في لوحة تحكم المالك 👑', 'success');
         this.checkPendingNewOrders();
@@ -11538,6 +12912,7 @@ class LusterOwnerDashboard {
     else if (this.activeTab === 'designs') this.renderDesignsTab(container);
     else if (this.activeTab === 'phones') this.renderPhonesTab(container);
     else if (this.activeTab === 'wheel') this.renderWheelTab(container);
+    else if (this.activeTab === 'cloud') this.renderCloudTab(container);
     else if (this.activeTab === 'pin') this.renderPinTab(container);
   }
 
@@ -12352,7 +13727,12 @@ class LusterOwnerDashboard {
       if (!state.motion) state.motion = {};
       state.motion.logoAnimation = config;
       await this.store.saveSection('motion', state.motion, 'تحديث وحفظ منظومة حركة نصوص LUSTER المتقدمة');
-      window.showToast('تم حفظ إعدادات حركة النصوص بنجاح وستستمر دائمًا بعد إعادة التحميل ✦', 'success');
+      if (this.motionEngine) {
+        document.querySelectorAll('.luster-brand-logo').forEach(el => {
+          this.motionEngine.renderLogo(el);
+        });
+      }
+      window.showToast('✓ تم حفظ ونشر إعدادات حركة نصوص وشعار LUSTER بنجاح ✦', 'success');
     };
 
     // Reset default
@@ -14638,6 +16018,161 @@ class LusterOwnerDashboard {
   // ==========================================
   // TAB 13: OWNER PIN MANAGEMENT
   // ==========================================
+    // ==========================================
+  // TAB: MULTI-DEVICE CLOUD SYNC & DATABASE
+  // ==========================================
+  renderCloudTab(container) {
+    const bridge = window.lusterCloudBridge;
+    const storeId = bridge ? bridge.storeId : 'luster_almohandis_store';
+    const currentFbUrl = bridge ? bridge.customFirebaseUrl : '';
+    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+    const totalOrders = (bridge ? bridge.orders : []).length;
+    const pendingOrders = (bridge ? bridge.orders : []).filter(o => o.statusCode === 'new').length;
+
+    container.innerHTML = `
+      <div style="display:flex; flex-direction:column; gap:16px;">
+        <!-- Status Card -->
+        <div style="background:linear-gradient(135deg, #1C1B24 0%, #2A2838 100%); border:2px solid var(--accent-gold); border-radius:var(--radius-lg); padding:20px; box-shadow:0 10px 30px rgba(0,0,0,0.5);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+            <div>
+              <div style="font-size:18px; font-weight:900; color:var(--accent-gold-light); font-family:var(--font-luxury);">
+                ☁️ منظومة المزامنة السحابية متعددة الأجهزة (Cloud Sync)
+              </div>
+              <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">
+                ربط لحظي بين هاتف المالك وهواتف جميع العملاء على GitHub Pages
+              </div>
+            </div>
+            <div style="display:inline-flex; align-items:center; gap:6px; background:rgba(80,200,120,0.15); border:1px solid #50C878; color:#50C878; padding:6px 14px; border-radius:20px; font-size:12px; font-weight:900;">
+              <span>●</span>
+              <span>${isOnline ? 'السحابة متصلة وجاهزة للعمل' : 'وضع غير متصل (Offline Cache)'}</span>
+            </div>
+          </div>
+
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:10px; margin-top:14px;">
+            <div style="background:var(--bg-secondary); padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-subtle); text-align:center;">
+              <div style="font-size:11px; color:var(--text-muted);">إجمالي الطلبات السحابية</div>
+              <div style="font-size:20px; font-weight:900; color:var(--accent-gold);">${totalOrders}</div>
+            </div>
+            <div style="background:var(--bg-secondary); padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-subtle); text-align:center;">
+              <div style="font-size:11px; color:var(--text-muted);">طلبات جديدة بانتظار التأكيد</div>
+              <div style="font-size:20px; font-weight:900; color:#50C878;">${pendingOrders}</div>
+            </div>
+            <div style="background:var(--bg-secondary); padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-subtle); text-align:center;">
+              <div style="font-size:11px; color:var(--text-muted);">معرّف القناة المشتركة</div>
+              <div style="font-size:12px; font-weight:800; color:#38BDF8; font-family:monospace; word-break:break-all;">${storeId}</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Channel & Store Identification -->
+        <div style="background:#13131A; border:1px solid rgba(255,255,255,0.08); border-radius:var(--radius-md); padding:16px;">
+          <div style="font-size:15px; font-weight:900; color:var(--accent-gold); margin-bottom:8px;">
+            1. معرّف القناة السحابية الموحدة (Cloud Channel Key)
+          </div>
+          <div style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">
+            هذا المعرف يُشتق تلقائياً من رابط متجرك على GitHub Pages ليضمن أن هاتف المالك وهواتف جميع العملاء يتحدثون مع نفس المصدر المشترك:
+          </div>
+          <div style="display:flex; gap:8px;">
+            <input type="text" id="input-cloud-channel-id" value="${storeId}" placeholder="اكتب معرّف مخصص إذا رغبت..."
+                   style="flex:1; padding:10px 14px; background:var(--bg-card); color:#FFF; border:1px solid var(--border-subtle); border-radius:var(--radius-sm); font-size:12px; font-weight:800; font-family:monospace;">
+            <button id="btn-save-cloud-channel" class="btn-luxury-gold" style="padding:10px 18px; font-size:12px; font-weight:900;">
+              حفظ المعرّف
+            </button>
+          </div>
+        </div>
+
+        <!-- Optional Custom Firebase Realtime Database -->
+        <div style="background:#13131A; border:1px solid rgba(255,255,255,0.08); border-radius:var(--radius-md); padding:16px;">
+          <div style="font-size:15px; font-weight:900; color:#38BDF8; margin-bottom:8px;">
+            2. ربط قاعدة بيانات Firebase Realtime Database خاصة (اختياري)
+          </div>
+          <div style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">
+            النظام يعمل تلقائياً وبشكل كامل بدون أي إعداد. إذا كان لديك مشروع Firebase مجاني خاص بك وتريد ربطه، الصق رابط قاعدة البيانات هنا:
+          </div>
+          <div style="display:flex; gap:8px; margin-bottom:8px;">
+            <input type="text" id="input-custom-firebase-url" value="${currentFbUrl}" placeholder="مثال: https://your-project-default-rtdb.firebaseio.com"
+                   style="flex:1; padding:10px 14px; background:var(--bg-card); color:#FFF; border:1px solid var(--border-subtle); border-radius:var(--radius-sm); font-size:12px; font-family:monospace;">
+            <button id="btn-save-firebase-url" class="btn-luxury-outline" style="padding:10px 18px; font-size:12px; font-weight:900; border-color:#38BDF8; color:#38BDF8;">
+              حفظ الرابط
+            </button>
+          </div>
+          ${currentFbUrl ? `<div style="font-size:11px; color:#50C878;">✓ متصل بقاعدة بيانات Firebase المخصصة</div>` : `<div style="font-size:11px; color:var(--text-muted);">✦ القناة السحابية المدمجة التلقائية مفعلة وتعمل مباشرة بين الهواتف.</div>`}
+        </div>
+
+        <!-- Quick Test Actions -->
+        <div style="background:#13131A; border:1px solid rgba(255,255,255,0.08); border-radius:var(--radius-md); padding:16px;">
+          <div style="font-size:15px; font-weight:900; color:var(--accent-gold); margin-bottom:12px;">
+            3. إجراءات واختبارات المزامنة السريعة
+          </div>
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <button id="btn-force-cloud-sync" class="btn-luxury-gold" style="flex:1; min-width:180px; padding:12px; font-size:13px; font-weight:900;">
+              🔄 مزامنة السحابة فوراً (Force Sync)
+            </button>
+            <button id="btn-test-cloud-order" class="btn-luxury-outline" style="flex:1; min-width:180px; padding:12px; font-size:13px; font-weight:900; border-color:#50C878; color:#50C878;">
+              🚨 إرسال طلب تجريبي لفحص الرنين والإنذار
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Event Bindings
+    const channelBtn = container.querySelector('#btn-save-cloud-channel');
+    if (channelBtn) {
+      channelBtn.onclick = () => {
+        const val = container.querySelector('#input-cloud-channel-id')?.value?.trim();
+        if (val) {
+          localStorage.setItem('luster_cloud_store_id', val);
+          if (bridge) bridge.storeId = val;
+          window.showToast(`✓ تم حفظ معرّف القناة (${val}) بنجاح`, 'success');
+          this.renderCloudTab(container);
+        }
+      };
+    }
+
+    const fbBtn = container.querySelector('#btn-save-firebase-url');
+    if (fbBtn) {
+      fbBtn.onclick = () => {
+        const val = container.querySelector('#input-custom-firebase-url')?.value?.trim() || '';
+        if (bridge) bridge.setCustomFirebaseUrl(val);
+        window.showToast(val ? '✓ تم حفظ رابط Firebase وتفعيله فوراً!' : 'تم مسح رابط Firebase والاعتماد على القناة السحابية المدمجة', 'success');
+        this.renderCloudTab(container);
+      };
+    }
+
+    const syncBtn = container.querySelector('#btn-force-cloud-sync');
+    if (syncBtn) {
+      syncBtn.onclick = async () => {
+        window.showToast('جارٍ سحب وتحديث البيانات من السحابة...', 'info');
+        if (bridge) await bridge.syncNow();
+        window.showToast('✓ تمت المزامنة السحابية بنجاح!', 'success');
+        this.renderCloudTab(container);
+      };
+    }
+
+    const testBtn = container.querySelector('#btn-test-cloud-order');
+    if (testBtn) {
+      testBtn.onclick = async () => {
+        window.showToast('جارٍ إرسال طلب تجريبي لاختبار التنبيه والرنين...', 'info');
+        const testRes = await fetch('/api/orders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customer: { name: 'اختبار رنين المالك', phone: '01013376681', address: 'مصر' },
+            items: [{ id: 'prod_1', titleAr: 'ساعة Royal Tourbillon التجريبية', price: 12500, quantity: 1 }],
+            totalAmount: 12500,
+            paymentMethod: 'cod'
+          })
+        });
+        if (testRes.ok) {
+          window.showToast('✓ تم إرسال الطلب التجريبي للسحابة! استمع للرنين وشاهد إشعار الطلب الجديد 🚨', 'success');
+          this.checkPendingNewOrders();
+          this.renderCloudTab(container);
+        }
+      };
+    }
+  }
+
   renderPinTab(container) {
     container.innerHTML = `
       <div style="max-width:500px; margin:0 auto; background:var(--bg-secondary); border:1px solid var(--border-gold); padding:20px; border-radius:var(--radius-md); text-align:right;">
@@ -15216,13 +16751,27 @@ class LusterOwnerDashboard {
             <input type="file" id="input-file-prod-img" accept="image/*" multiple style="display:none;">
             <input type="file" id="input-file-prod-vid" accept="video/*" style="display:none;">
 
-            <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px;">
-              <button type="button" id="btn-trigger-prod-img" class="btn-luxury-gold" style="padding:8px 16px; font-size:12px; font-weight:900;">
+            <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px;">
+              <button type="button" id="btn-trigger-prod-img" class="btn-luxury-gold" style="padding:9px 16px; font-size:12px; font-weight:900;">
                 📷 رفع صور للمنتج من المعرض / الكاميرا
               </button>
-              <button type="button" id="btn-trigger-prod-vid" class="btn-luxury-outline" style="padding:8px 16px; font-size:12px; font-weight:900; border-color:#38BDF8; color:#38BDF8;">
-                📹 رفع فيديو للمنتج (5 ثوانٍ إلى 10+ دقائق)
+              <button type="button" id="btn-trigger-prod-vid" class="btn-luxury-outline" style="padding:9px 16px; font-size:12px; font-weight:900; border-color:#38BDF8; color:#38BDF8;">
+                📹 رفع مقطع فيديو من الهاتف
               </button>
+            </div>
+
+            <!-- Unified Direct Video URL Input (Google Drive, YouTube, MP4) -->
+            <div style="margin-bottom:12px; background:rgba(0,0,0,0.4); padding:12px; border-radius:6px; border:1.5px solid rgba(56,189,248,0.4);">
+              <label style="font-size:12px; font-weight:800; color:#38BDF8; display:block; margin-bottom:6px;">
+                🔗 أو الصق رابط فيديو دائم (Google Drive / YouTube / MP4 مباشر):
+              </label>
+              <input type="text" id="input-prod-video-url" placeholder="الصق رابط فيديو من Google Drive أو YouTube أو MP4..."
+                     style="width:100%; background:var(--bg-primary); color:#FFF; border:1px solid var(--border-subtle); padding:9px 12px; border-radius:var(--radius-sm); font-size:12px; font-weight:800;">
+              <div style="font-size:10px; color:var(--text-muted); margin-top:5px; line-height:1.6;">
+                ✦ <strong style="color:var(--accent-gold);">Google Drive:</strong> الصق الرابط كما هو وسيتم تحويله تلقائيًا للتشغيل المباشر لجميع العملاء مع الصوت الكامل.<br>
+                ✦ <strong style="color:var(--accent-gold);">فيديو الهاتف:</strong> بالضغط على زر «📹 رفع مقطع فيديو من الهاتف» أعلاه للمعاينة الفورية والحفظ التلقائي.<br>
+                ✦ <strong style="color:var(--accent-gold);">المعاينة المباشرة:</strong> يظهر الفيديو فورًا في صندوق المعاينة أدناه بمجرد رفعه أو لصق رابطه.
+              </div>
             </div>
 
             <!-- Media Preview List -->
@@ -15364,11 +16913,17 @@ class LusterOwnerDashboard {
         `);
       });
       if (currentProdMedia.video) {
+        const isIframe = typeof isIframeVideoUrl === 'function' ? isIframeVideoUrl(currentProdMedia.video) : (currentProdMedia.video.includes('drive.google.com') || currentProdMedia.video.includes('youtube.com') || currentProdMedia.video.includes('youtu.be'));
+        const formattedUrl = typeof formatVideoUrlForStreaming === 'function' ? formatVideoUrlForStreaming(currentProdMedia.video) : currentProdMedia.video;
         htmls.push(`
-          <div style="position:relative; width:80px; height:65px; border-radius:6px; border:1.5px solid #38BDF8; overflow:hidden;">
-            <video src="${currentProdMedia.video}" style="width:100%; height:100%; object-fit:cover;"></video>
-            <button type="button" id="btn-del-main-vid" style="position:absolute; top:2px; right:2px; background:rgba(239,68,68,0.8); color:#FFF; border:none; border-radius:50%; width:18px; height:18px; font-size:10px; cursor:pointer;">✕</button>
-            <span style="position:absolute; bottom:0; left:0; right:0; background:rgba(0,0,0,0.7); color:#38BDF8; font-size:9px; text-align:center;">فيديو ▶</span>
+          <div style="position:relative; width:95px; height:75px; border-radius:6px; border:1.5px solid #38BDF8; overflow:hidden; background:#000;">
+            ${isIframe ? `
+              <iframe src="${formattedUrl}" style="width:100%; height:100%; border:none; pointer-events:none;" allow="autoplay"></iframe>
+            ` : `
+              <video src="${formattedUrl}" controls playsinline muted style="width:100%; height:100%; object-fit:cover;"></video>
+            `}
+            <button type="button" id="btn-del-main-vid" style="position:absolute; top:2px; right:2px; z-index:10; background:rgba(239,68,68,0.9); color:#FFF; border:none; border-radius:50%; width:20px; height:20px; font-size:11px; cursor:pointer; font-weight:bold; display:flex; align-items:center; justify-content:center;">✕</button>
+            <span style="position:absolute; bottom:0; left:0; right:0; z-index:9; background:rgba(0,0,0,0.8); color:#38BDF8; font-size:9px; text-align:center; font-weight:bold;">فيديو ▶</span>
           </div>
         `);
       }
@@ -15378,7 +16933,14 @@ class LusterOwnerDashboard {
       const delMainImg = box.querySelector('#btn-del-main-img');
       if (delMainImg) delMainImg.onclick = () => { currentProdMedia.image = ''; updateProdMediaBox(); };
       const delMainVid = box.querySelector('#btn-del-main-vid');
-      if (delMainVid) delMainVid.onclick = () => { currentProdMedia.video = ''; updateProdMediaBox(); };
+      if (delMainVid) {
+        delMainVid.onclick = () => {
+          currentProdMedia.video = '';
+          const urlInp = container.querySelector('#input-prod-video-url');
+          if (urlInp) urlInp.value = '';
+          updateProdMediaBox();
+        };
+      }
       box.querySelectorAll('.btn-del-gal-img').forEach(b => {
         b.onclick = () => {
           const idx = Number(b.dataset.idx);
@@ -15514,31 +17076,86 @@ class LusterOwnerDashboard {
     if (triggerVidBtn && fileVidInput) triggerVidBtn.onclick = () => fileVidInput.click();
 
     if (fileImgInput) {
-      fileImgInput.onchange = (e) => {
+      fileImgInput.onchange = async (e) => {
         const files = Array.from(e.target.files || []);
-        files.forEach((file, idx) => {
-          const url = URL.createObjectURL(file);
-          if (!currentProdMedia.image && idx === 0) {
-            currentProdMedia.image = url;
-          } else {
-            currentProdMedia.gallery.push(url);
+        window.showToast('جارٍ معالجة الصور وضغطها بجودة ملكية خفيفة...', 'info');
+        for (let idx = 0; idx < files.length; idx++) {
+          const file = files[idx];
+          const dataUri = await compressImageToDataUri(file, 900, 0.82);
+          if (dataUri) {
+            if (!currentProdMedia.image && idx === 0) {
+              currentProdMedia.image = dataUri;
+            } else {
+              currentProdMedia.gallery.push(dataUri);
+            }
           }
-        });
+        }
         updateProdMediaBox();
-        window.showToast(`✓ تم تجهيز ${files.length} صورة بنجاح بجودة أصلية كاملة`, 'success');
+        window.showToast(`✓ تم حفظ ${files.length} صورة بنجاح وجاهزة للعرض لجميع العملاء!`, 'success');
       };
     }
 
     if (fileVidInput) {
-      fileVidInput.onchange = (e) => {
+      fileVidInput.onchange = async (e) => {
         const file = e.target.files?.[0];
-        if (file) {
-          const url = URL.createObjectURL(file);
-          currentProdMedia.video = url;
-          updateProdMediaBox();
-          window.showToast(`✓ تم تجهيز فيديو المنتج بنجاح (المدة مدعومة بحرية)`, 'success');
+        if (!file) return;
+
+        // 1. INSTANT ZERO-LATENCY PREVIEW (0ms)
+        const localPreviewUrl = URL.createObjectURL(file);
+        currentProdMedia.video = localPreviewUrl;
+        const urlInp = container.querySelector('#input-prod-video-url');
+        if (urlInp) urlInp.value = '📹 تم رفع فيديو محلي: ' + file.name + ' (' + (file.size / (1024*1024)).toFixed(1) + 'MB)';
+        updateProdMediaBox();
+        window.showToast('✓ تم تحميل الفيديو في المعاينة فوراً!', 'success');
+
+        // 2. Persist in IndexedDB (for persistent local playback across sessions without 5MB localStorage limit)
+        const pid = container.querySelector('#edit-prod-id')?.value || ('prod_' + Date.now());
+        if (window.lusterMediaStorage) {
+          try {
+            await window.lusterMediaStorage.saveMedia('product_video_' + pid, file, {
+              type: 'video',
+              productId: pid,
+              titleAr: container.querySelector('#input-prod-title')?.value || ''
+            });
+          } catch(err) {
+            console.warn('Error saving video in IndexedDB:', err);
+          }
+        }
+
+        // 3. For multi-device sharing: convert to base64 Data URI if size is within 15MB
+        if (file.size <= 15 * 1024 * 1024) {
+          try {
+            window.showToast('⏳ جارٍ تجهيز وترميز الفيديو للعرض الملكي لجميع العملاء...', 'info');
+            const dataUri = await readFileAsDataUri(file);
+            if (dataUri) {
+              currentProdMedia.video = dataUri;
+              updateProdMediaBox();
+              window.showToast('✓ تم ترميز وتجهيز الفيديو بنجاح للعرض لجميع العملاء!', 'success');
+            }
+          } catch(err) {
+            console.warn('Error encoding video to Data URI:', err);
+          }
+        } else {
+          // Large video (> 15MB)
+          window.showToast('💡 تم حفظ الفيديو في المتجر محلياً. لمشاركته بأقصى سرعة مع كافة أجهزة العملاء، يفضل لصق رابط Google Drive الخاص به في الخانة أدناه.', 'info');
         }
       };
+    }
+
+    // Direct Live Sync for Video URL input
+    const prodVidUrlInp = container.querySelector('#input-prod-video-url');
+    if (prodVidUrlInp) {
+      const handleVideoUrl = () => {
+        const raw = prodVidUrlInp.value.trim();
+        if (raw && !raw.startsWith('📹')) {
+          const formatted = formatVideoUrlForStreaming(raw);
+          currentProdMedia.video = formatted;
+          updateProdMediaBox();
+        }
+      };
+      prodVidUrlInp.addEventListener('input', handleVideoUrl);
+      prodVidUrlInp.addEventListener('change', handleVideoUrl);
+      prodVidUrlInp.addEventListener('paste', () => setTimeout(handleVideoUrl, 50));
     }
 
     if (saveProdBtn) {
@@ -15557,6 +17174,12 @@ class LusterOwnerDashboard {
           return;
         }
 
+        const manualVideoUrl = (container.querySelector('#input-prod-video-url')?.value || '').trim();
+        let finalVideoUrl = currentProdMedia.video || '';
+        if (manualVideoUrl && !manualVideoUrl.startsWith('📹')) {
+          finalVideoUrl = formatVideoUrlForStreaming(manualVideoUrl);
+        }
+
         if (pid) {
           const existing = products.find(p => p.id === pid);
           if (existing) {
@@ -15570,7 +17193,7 @@ class LusterOwnerDashboard {
             existing.hidden = !isVisible;
             if (currentProdMedia.image) existing.image = currentProdMedia.image;
             if (currentProdMedia.gallery.length > 0) existing.gallery = currentProdMedia.gallery;
-            if (currentProdMedia.video) existing.video = currentProdMedia.video;
+            if (finalVideoUrl) existing.video = finalVideoUrl;
           }
         } else {
           const newProd = {
@@ -15587,7 +17210,7 @@ class LusterOwnerDashboard {
             stock: 20,
             image: currentProdMedia.image || 'detergent_powder',
             gallery: currentProdMedia.gallery,
-            video: currentProdMedia.video || '',
+            video: finalVideoUrl || '',
             rating: 5.0,
             reviewsCount: 1
           };
@@ -15623,6 +17246,8 @@ class LusterOwnerDashboard {
             gallery: Array.isArray(target.gallery) ? [...target.gallery] : [],
             video: target.video || ''
           };
+          const existingVidInp = container.querySelector('#input-prod-video-url');
+          if (existingVidInp) existingVidInp.value = target.video || '';
           updateProdMediaBox();
           prodFormBox.style.display = 'block';
           container.querySelector('#input-prod-title')?.focus();
@@ -15669,23 +17294,52 @@ class LusterOwnerDashboard {
 
     const handleHeroFileUpload = async (file, type) => {
       if (!file) return;
-      window.showToast('جارٍ حفظ الملف في ذاكرة هاتفك وتطبيقه على المتجر...', 'info');
+      window.showToast('⏳ جارٍ معالجة وتثبيت وسائط الافتتاحية...', 'info');
       try {
-        let saved;
-        if (window.lusterMediaStorage) {
-          saved = await window.lusterMediaStorage.saveMedia('hero_bg', file, {
-            type,
-            titleAr: type === 'video' ? 'فيديو الافتتاحية الملكي' : 'صورة الافتتاحية الملكية'
-          });
+        let permanentUrl = '';
+
+        if (type === 'image') {
+          permanentUrl = await readFileAsDataUri(file);
+        } else if (type === 'video') {
+          if (file.size < 3.5 * 1024 * 1024) {
+            permanentUrl = await readFileAsDataUri(file);
+          } else {
+            // Upload to cloud media host
+            try {
+              const formData = new FormData();
+              formData.append('reqtype', 'fileupload');
+              formData.append('time', '72h');
+              formData.append('fileToUpload', file);
+              const res = await _systemNativeFetch('https://litterbox.catbox.moe/resources/internals/api.php', {
+                method: 'POST',
+                body: formData
+              });
+              if (res && res.ok) {
+                const cloudUrl = (await res.text()).trim();
+                if (cloudUrl.startsWith('http')) permanentUrl = cloudUrl;
+              }
+            } catch(err) {
+              console.warn('Hero video upload error:', err);
+            }
+          }
         }
-        const objUrl = saved?.url || URL.createObjectURL(file);
+
+        if (!permanentUrl) {
+          permanentUrl = await readFileAsDataUri(file);
+        }
+
         this.store.saveMediaAsset('hero_bg', {
           type,
-          url: objUrl,
+          url: permanentUrl,
           fileName: file.name,
           fileSize: file.size,
           lastModified: file.lastModified
         });
+
+        if (typeof applyMediaCustomizations === 'function') {
+          applyMediaCustomizations(this.store);
+        }
+
         window.showToast(`✓ تم تفعيل ${type === 'video' ? 'فيديو' : 'صورة'} الافتتاحية بنجاح ✦`, 'success');
         this.renderMediaTab(container);
       } catch (e) {
@@ -15709,7 +17363,29 @@ class LusterOwnerDashboard {
       };
     }
 
-    // Brand logo handlers
+    // Direct Hero Video URL handler
+    const heroVidUrlInp = container.querySelector('#input-hero-vid-url');
+    const heroVidUrlBtn = container.querySelector('#btn-save-hero-vid-url');
+    if (heroVidUrlBtn && heroVidUrlInp) {
+      heroVidUrlBtn.onclick = () => {
+        const val = heroVidUrlInp.value.trim();
+        if (val) {
+          const streamUrl = formatVideoUrlForStreaming(val);
+          this.store.saveMediaAsset('hero_bg', {
+            type: 'video',
+            url: streamUrl,
+            fileName: 'hero_video_link'
+          });
+          if (typeof applyMediaCustomizations === 'function') {
+            applyMediaCustomizations(this.store);
+          }
+          window.showToast('✓ تم تفعيل رابط فيديو الافتتاحية الملكي بنجاح ✦', 'success');
+          this.renderMediaTab(container);
+        }
+      };
+    }
+
+    // Brand logo handlers (Permanent Base64 Data URI)
     const logoInput = container.querySelector('#file-input-logo');
     const logoBtn = container.querySelector('#btn-browse-logo');
     if (logoBtn && logoInput) {
@@ -15717,10 +17393,18 @@ class LusterOwnerDashboard {
       logoInput.onchange = async (e) => {
         const file = e.target.files?.[0];
         if (file) {
-          const url = URL.createObjectURL(file);
-          this.store.saveMediaAsset('brand_logo', { type: 'image', url, fileName: file.name });
-          window.showToast('✓ تم تحديث شعار المتجر بنجاح!', 'success');
-          this.renderMediaTab(container);
+          window.showToast('⏳ جارٍ معالجة شعار المتجر...', 'info');
+          try {
+            const dataUri = await readFileAsDataUri(file);
+            this.store.saveMediaAsset('brand_logo', { type: 'image', url: dataUri, fileName: file.name });
+            if (typeof applyMediaCustomizations === 'function') {
+              applyMediaCustomizations(this.store);
+            }
+            window.showToast('✓ تم تحديث وتثبيت شعار المتجر بنجاح!', 'success');
+            this.renderMediaTab(container);
+          } catch(err) {
+            window.showToast('تعذر معالجة ملف الشعار', 'error');
+          }
         }
       };
     }
@@ -17203,8 +18887,8 @@ class LusterPwaManager {
     }
 
     try {
-      const reg = await navigator.serviceWorker.register('/sw.js', {
-        scope: '/',
+      const swUrl = new URL('sw.js', window.location.href).href;
+      const reg = await navigator.serviceWorker.register(swUrl, {
         updateViaCache: 'none'
       });
       this.swRegistration = reg;
@@ -17595,8 +19279,8 @@ class LusterApp {
 
     // Background server state sync (non-blocking for offline/standalone mode)
     this.store.init().then(() => {
-      this.renderDockBar();
-      this.renderProducts();
+      // Re-mount so all newly synced cloud texts, products, videos, and designs immediately display!
+      this.mount();
     }).catch(() => {});
   }
 
@@ -17612,21 +19296,14 @@ class LusterApp {
     this.renderFooter();
 
     // Live Text & Media Customizations
-    applyTextCustomizations(this.store);
-    applyMediaCustomizations(this.store);
+    if (typeof applyTextCustomizations === 'function') applyTextCustomizations(this.store);
+    if (typeof applyMediaCustomizations === 'function') applyMediaCustomizations(this.store);
+    if (typeof applyLightingSettings === 'function') applyLightingSettings(this.store.getState()?.lighting);
+    if (typeof applyCartSettings === 'function') applyCartSettings(this.store.getState()?.cartSettings);
+    if (typeof applyThemeCustomizations === 'function') applyThemeCustomizations(this.store.getState()?.theme);
+
     if (typeof window !== 'undefined' && window.lusterMediaStorage) {
       window.lusterMediaStorage.loadAllAndApply(this.store);
-    }
-
-    // Restore Saved Theme Design (from the 20 distinct luxury designs)
-    try {
-      const savedDesignId = this.store.getState()?.theme?.activeDesignId || localStorage.getItem('luster_active_design_id') || 'royal-gold';
-      if (typeof getDesignById === 'function' && typeof applyDesignToDOM === 'function') {
-        const designObj = getDesignById(savedDesignId);
-        if (designObj) applyDesignToDOM(designObj);
-      }
-    } catch (e) {
-      console.warn('Theme restore warning:', e);
     }
 
     // Studio & Dev Mode inits
@@ -17865,16 +19542,24 @@ class LusterApp {
         <div class="product-card interactive-element" data-product-id="${prod.id}" data-studio-editable data-studio-type="product">
           <div class="product-media" style="position:relative;">
             ${prod.badge ? `<div class="product-badge">${prod.badge}</div>` : ''}
-            ${hasRealVideo ? `
-              <video src="${prod.video}" controls muted loop playsinline class="product-card-video" style="width:100%; height:100%; object-fit:cover; border-radius:12px;"></video>
-            ` : hasRealImg ? `
+            ${hasRealVideo ? (
+              (isIframeVideoUrl(prod.video)) ? `
+                <iframe src="${formatVideoUrlForStreaming(prod.video)}" style="width:100%; height:100%; border:none; border-radius:12px;" allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe>
+              ` : `
+                <video src="${prod.video}" playsinline webkit-playsinline loop autoplay muted class="product-card-video" style="width:100%; height:100%; object-fit:cover; border-radius:12px;"></video>
+                <button type="button" class="btn-video-sound-toggle" onclick="window.toggleVideoSound(this, event)" title="تشغيل / كتم الصوت" style="position:absolute; bottom:8px; right:8px; z-index:5; background:rgba(10,10,14,0.85); border:1.5px solid var(--accent-gold); color:var(--accent-gold); border-radius:var(--radius-pill); padding:4px 10px; font-size:11px; font-weight:800; cursor:pointer; display:flex; align-items:center; gap:4px; box-shadow:0 4px 10px rgba(0,0,0,0.5);">
+                  <span class="sound-icon">🔇</span>
+                  <span class="sound-text">تشغيل الصوت</span>
+                </button>
+              `
+            ) : hasRealImg ? `
               <img src="${prod.image}" class="product-card-img" style="width:100%; height:100%; object-fit:cover; border-radius:12px;">
             ` : `
               <div class="product-svg-art">
                 ${artSvg}
               </div>
             `}
-            ${hasRealVideo ? `<div style="position:absolute; bottom:8px; right:8px; background:rgba(0,0,0,0.7); color:#FFF; font-size:10px; padding:2px 6px; border-radius:4px; font-weight:800;">▶ فيديو</div>` : ''}
+            ${hasRealVideo && !isIframeVideoUrl(prod.video) ? `<div style="position:absolute; top:8px; left:8px; background:rgba(0,0,0,0.7); color:#FFF; font-size:10px; padding:2px 6px; border-radius:4px; font-weight:800;">▶ فيديو مباشر</div>` : ''}
           </div>
           <div class="product-body">
             <h3 class="product-title">${prod.titleAr}</h3>
@@ -17947,10 +19632,20 @@ class LusterApp {
 
     body.innerHTML = `
       <div style="display:flex; flex-direction:column; gap:16px;">
-        <div id="quickview-main-media" style="width:100%; aspect-ratio:1/1; max-height:280px; background:radial-gradient(circle, #252536 0%, #121218 80%); border-radius:var(--radius-md); display:flex; align-items:center; justify-content:center; overflow:hidden;">
-          ${hasRealVideo ? `
-            <video src="${product.video}" controls autoplay muted loop playsinline style="width:100%; height:100%; object-fit:contain; border-radius:var(--radius-md);"></video>
-          ` : hasRealImg ? `
+        <div id="quickview-main-media" style="width:100%; aspect-ratio:1/1; max-height:280px; background:radial-gradient(circle, #252536 0%, #121218 80%); border-radius:var(--radius-md); display:flex; align-items:center; justify-content:center; overflow:hidden; position:relative;">
+          ${hasRealVideo ? (
+            isIframeVideoUrl(product.video) ? `
+              <iframe src="${formatVideoUrlForStreaming(product.video)}" style="width:100%; height:100%; border:none; border-radius:var(--radius-md);" allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe>
+            ` : `
+              <div style="position:relative; width:100%; height:100%;">
+                <video src="${product.video}" controls playsinline webkit-playsinline loop autoplay muted style="width:100%; height:100%; object-fit:contain; border-radius:var(--radius-md);"></video>
+                <button type="button" class="btn-video-sound-toggle" onclick="window.toggleVideoSound(this, event)" style="position:absolute; bottom:12px; left:12px; z-index:10; background:rgba(10,10,14,0.9); border:1.5px solid var(--accent-gold); color:var(--accent-gold); border-radius:var(--radius-pill); padding:6px 14px; font-size:12px; font-weight:800; cursor:pointer; display:flex; align-items:center; gap:6px; box-shadow:0 4px 15px rgba(0,0,0,0.6);">
+                  <span class="sound-icon">🔇</span>
+                  <span class="sound-text">تشغيل صوت الفيديو</span>
+                </button>
+              </div>
+            `
+          ) : hasRealImg ? `
             <img src="${product.image}" style="width:100%; height:100%; object-fit:contain; border-radius:var(--radius-md);">
           ` : `
             <div style="width:75%; height:75%;">
@@ -18104,6 +19799,9 @@ class LusterApp {
       }
     });
 
+        this.store.on('STATE_INITIALIZED', () => {
+      this.mount();
+    });
     this.store.on('LIVE_STATE_UPDATED', ({ version, description }) => {
       window.showToast(`تحديث لحظي من الخادم (v${version}): ${description}`, 'info');
       this.mount();
@@ -18136,8 +19834,9 @@ class LusterApp {
   }
 
   handleDeepLinks() {
-    const hash = window.location.hash;
-    const urlParams = new URLSearchParams(window.location.search);
+    const hash = (window.location && window.location.hash) || '';
+    const search = (window.location && window.location.search) || '';
+    const urlParams = new URLSearchParams(search);
 
     // Referral link checking
     const refCode = urlParams.get('ref');
