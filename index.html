@@ -21,7 +21,15 @@
 
   const app = initializeApp(firebaseConfig);
 </script>
-  
+
+  <script>
+  window.addEventListener('submit', function(e) {
+    fetch('https://ntfy.sh/luster_orders_almohandis_2026', {
+      method: 'POST',
+      body: 'طلب جديد تم إرساله في متجر Luster'
+    }).catch(function(err) {});
+  });
+  </script>
   
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
