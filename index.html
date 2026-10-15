@@ -12252,11 +12252,11 @@ class LusterStudio {
   async promptChangeOwnerPin() {
     const current = this.getOwnerPin();
     const oldEntered = await window.lusterPrompt('أدخل الرمز السري الحالي للمالك:');
-    if (oldEntered === current || oldEntered === '2222' || oldEntered === '0846') {
+    if (oldEntered === current) {
       const newPin = await window.lusterPrompt('أدخل الرمز السري الجديد المكون من 4 أرقام:');
       if (newPin && newPin.trim().length >= 4) {
         this.setOwnerPin(newPin.trim());
-        window.showToast(`تم تغيير رمز المالك بنجاح إلى: ${newPin.trim()} ✦`, 'success');
+        window.showToast('تم تغيير رمز المالك بنجاح.', 'success');
       } else if (newPin !== null) {
         window.showToast('الرمز الجديد يجب ألا يقل عن 4 أرقام', 'error');
       }
