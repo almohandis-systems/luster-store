@@ -54,3 +54,11 @@ The current frontend includes a shared KVDB endpoint identifier and public ntfy 
 ## Release gate
 
 Do not merge or deploy until P0 authorization/rules risks are resolved, order and privacy tests pass, and a separate explicit production-release approval is obtained.
+
+### Additional mitigations committed to the isolated branch
+- Removed the two alternate hard-coded PIN bypass comparisons from the owner PIN-change flow; the entered PIN must now match the configured current PIN.
+- Removed the success toast that printed the new owner PIN back onto the screen.
+- Removed the UI action that copied the permissive public Firestore rules and replaced it with an explicit security warning.
+- Re-ran JavaScript syntax parsing after these changes: all eight inline script blocks parsed successfully.
+
+These mitigations do **not** make the owner PIN secure against browser inspection or local storage manipulation. Server-enforced owner authorization remains a release blocker.
