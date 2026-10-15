@@ -31,6 +31,9 @@ if (/allow\s+read\s*,\s*create:\s*if\s+true\s*;/i.test(html) &&
 if (/getOwnerPin\(\)\s*\{[\s\S]{0,220}?\|\|\s*['"]2222['"]/i.test(html)) {
   blockers.push('Owner PIN has a hard-coded default in client-side code.');
 }
+if (/getOwnerPin\(\)\s*\{[\s\S]{0,220}?localStorage\.getItem\(['"]luster_owner_pin['"]\)/i.test(html) || /setOwnerPin\(newPin\)\s*\{[\s\S]{0,180}?localStorage\.setItem\(['"]luster_owner_pin['"]/i.test(html)) {
+  blockers.push('Owner authorization PIN is stored in browser-controlled storage; server-enforced owner authentication is required.');
+}
 if (/oldEntered\s*===\s*['"]2222['"]|oldEntered\s*===\s*['"]0846['"]/i.test(html)) {
   blockers.push('Owner PIN change accepts hard-coded bypass values.');
 }
