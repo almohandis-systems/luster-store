@@ -12,8 +12,8 @@
 ### P0 — Firestore rules template is unsafe
 The owner cloud-settings UI offers a rules template that grants public reads and writes to `luster_orders` and `luster_store`. If copied into Firebase, anyone with access to the project can read or modify records. Replace this with a fail-closed, authenticated rules design only after the actual authentication/role model and required document access are implemented and tested. Do not ask the owner to publish the current template.
 
-### P0 — Owner PIN is client-side and the login modal still contains bypasses
-The code reads the owner PIN from browser storage/state with a default value of `2222`. The owner login modal also accepts `2222` and `0846` unconditionally, regardless of the configured PIN. The PIN-change path's extra comparisons were removed in an earlier isolated mitigation, but the login modal bypass remains in the current branch file. A client-side PIN is not a server authorization boundary. The code initializes Firebase Auth with anonymous sign-in for clients, but the static review found no owner sign-in flow or server-assigned owner claim. Anonymous customer authentication alone does not prove owner identity. Do not treat the earlier PIN-change mitigation as complete. Sensitive owner actions and data writes must be protected by Firebase Authentication plus server-enforced authorization (for example, custom claims or a verified owner role). Plan a migration and recovery path before replacing the login flow so the legitimate owner is not locked out.
+### P0 — Owner authorization is still client-side and default PIN remains
+The login modal's unconditional `2222` and `0846` bypass checks have now been removed on this isolated branch; login compares the entered PIN only with the configured PIN. However, the configured PIN still falls back to the public default `2222`, and the PIN itself is stored client-side. This remains unsafe for commercial use. The code initializes Firebase Auth with anonymous sign-in for clients, but the static review found no owner sign-in flow or server-assigned owner claim. Anonymous customer authentication alone does not prove owner identity. Sensitive owner actions and data writes must be protected by Firebase Authentication plus server-enforced authorization (for example, custom claims or a verified owner role). Plan a migration and recovery path before replacing the login flow so the legitimate owner is not locked out.
 
 ### P1 — Order synchronization has multiple sources of truth
 Order state can come from localStorage, the local API shim, ntfy messages, KVDB, and Firestore. This can create stale/conflicting status and cross-device discrepancies. The existing draft change merges API and local order lists and acknowledges cached orders, but this is not proof of reliable cross-device delivery. Establish one authoritative persistent source, stable order IDs, server-side status transitions, and idempotent acknowledgment. Test customer and owner sessions in separate browsers/devices, including offline/reconnect and simultaneous orders.
@@ -56,10 +56,11 @@ The current frontend includes a shared KVDB endpoint identifier and public ntfy 
 Do not merge or deploy until P0 authorization/rules risks are resolved, order and privacy tests pass, and a separate explicit production-release approval is obtained.
 
 ### Additional mitigations committed to the isolated branch
-- Removed the two alternate hard-coded PIN bypass comparisons from the owner PIN-change flow; the entered PIN must now match the configured current PIN. A later check found the owner login modal still accepts hard-coded `2222` and `0846`, so this mitigation is incomplete and the login bypass remains a P0 blocker.
+- Removed the two alternate hard-coded PIN bypass comparisons from the owner PIN-change flow.
+- Removed unconditional `2222`/`0846` acceptance from the owner login modal; it now compares only with the configured PIN. The default PIN fallback and client-side authorization remain P0 blockers.
 - Removed the success toast that printed the new owner PIN back onto the screen.
 - Removed the UI action that copied the permissive public Firestore rules and replaced it with an explicit security warning.
-- Re-ran JavaScript syntax parsing after these changes: all eight inline script blocks parsed successfully.
+- Re-ran JavaScript syntax parsing after the latest owner-login change: all eight inline script blocks parsed successfully. This does not test runtime authorization or customer/owner flows.
 
 These mitigations do **not** make the owner PIN secure against browser inspection or local storage manipulation. Server-enforced owner authorization remains a release blocker.
 
