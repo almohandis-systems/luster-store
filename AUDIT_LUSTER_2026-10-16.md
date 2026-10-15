@@ -79,3 +79,14 @@ These mitigations do **not** make the owner PIN secure against browser inspectio
 - Rechecked the current source: the old public Firestore rules template is absent; the owner PIN still has a client-side default fallback (`2222`). Static search did not find a Gemini integration. The AI menu-import workflow therefore remains unimplemented in the inspected HTML.
 - The current single-file app still needs a real owner authentication/authorization migration. Do not treat the UI warning alone as a security fix for Firestore itself.
 - No Firebase deployment, production Firestore rules change, browser test, cross-device order test, payment verification, or load test was performed. The application is not certified for commercial launch.
+
+
+## Follow-up hardening update
+
+- Removed the unconditional hard-coded owner-PIN bypass checks for `2222` and `0846`.
+- Removed the owner PIN value from the success toast to avoid echoing the secret on screen.
+- Replaced the dangerous copyable Firestore rules template with an explicit warning; this does not itself configure or secure Firebase.
+- Added GitHub Actions static checks. Latest run parsed all 8 inline JavaScript blocks with zero syntax errors, then correctly failed the release gate because the owner PIN still falls back to the hard-coded client-side default `2222`.
+- The remaining owner authentication blocker requires a real owner identity and server-enforced authorization. Removing the default PIN alone would risk locking the owner out and would not fix the underlying security model.
+- AI menu import and general cart/checkout sound effects remain unimplemented in the audited HTML; no Gemini integration was found by static search.
+- No browser E2E tests, Firebase rules tests, load tests, or Firebase Hosting deployment have been performed.
