@@ -19469,15 +19469,12 @@ class LusterOwnerDashboard {
 
     const rulesBtn = container.querySelector('#btn-copy-firestore-rules');
     if (rulesBtn) {
+      // Safety guard: never offer the previous public read/write Firestore rules.
+      // A secure production policy must be designed against the verified owner role
+      // and actual customer access model before it can be copied or deployed.
       rulesBtn.onclick = () => {
-        const rules = `rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    match /luster_orders/{orderId} {\n      allow read, create: if true;\n      allow update, delete: if true;\n    }\n    match /luster_store/{document=**} {\n      allow read: if true;\n      allow write: if true;\n    }\n  }\n}`;
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(rules).then(() => {
-            window.showToast('✓ تم نسخ قواعد الحماية للحافظة! يمكنك لصقها في Firebase Console', 'success');
-          });
-        } else {
-          window.lusterPrompt('قواعد أمان Firestore جاهزة للنسخ:', rules);
-        }
+        window.showToast('تم إيقاف نسخ قواعد Firestore القديمة لأنها تسمح للجميع بقراءة وتعديل البيانات. لا تنشر قواعد قبل إعداد صلاحيات موثقة واختبارها.', 'error');
+        window.lusterPrompt('تنبيه أمني مهم: تم تعطيل نسخ القواعد القديمة لأنها تسمح بقراءة وكتابة بيانات الطلبات والمتجر للجميع. يلزم إعداد Firebase Authentication وصلاحيات المالك وقواعد مقيدة ثم اختبارها قبل النشر.');
       };
     }
 
