@@ -29,6 +29,11 @@ The current frontend includes a shared KVDB endpoint identifier and public ntfy 
 - No general button/cart/checkout sound system was found in static search; wheel audio code does exist.
 - These are static-search findings only, not proof that no related UI or partial implementation exists.
 
+## Safety patch applied on the isolated work branch
+
+- Disabled the UI action that copied the known-public Firestore rules template. It now warns the owner not to publish those rules before verified authentication/authorization and restrictive rules are implemented.
+- This is a guardrail, not a complete Firebase security implementation; existing deployed rules are unchanged, and the application still requires a proper owner authorization model.
+
 ## Validation performed
 
 - Retrieved `main/index.html` (about 1.50 MB) and the existing draft branch file.
