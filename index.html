@@ -12296,7 +12296,7 @@ class LusterStudio {
     const attemptLogin = () => {
       const pin = pinInput.value.trim();
       const validPin = this.getOwnerPin();
-      if (pin === validPin || pin === '2222' || pin === '0846') {
+      if (pin === validPin) {
         sessionStorage.setItem('luster_owner_authenticated', 'true');
         modal.style.display = 'none';
         window.showToast('تم التحقق بنجاح! مرحبًا بك في استوديو المالك ✦', 'success');
