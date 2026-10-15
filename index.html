@@ -15106,7 +15106,7 @@ class LusterOwnerDashboard {
   }
 
   getOwnerPin() {
-    return localStorage.getItem('luster_owner_pin') || this.store.getState()?.ownerAuth?.pin || '2222';
+    return localStorage.getItem('luster_owner_pin') || this.store.getState()?.ownerAuth?.pin || '';
   }
 
   setOwnerPin(newPin) {
