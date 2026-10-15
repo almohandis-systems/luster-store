@@ -62,3 +62,11 @@ Do not merge or deploy until P0 authorization/rules risks are resolved, order an
 - Re-ran JavaScript syntax parsing after these changes: all eight inline script blocks parsed successfully.
 
 These mitigations do **not** make the owner PIN secure against browser inspection or local storage manipulation. Server-enforced owner authorization remains a release blocker.
+
+
+## Deployment readiness check
+
+- The isolated branch currently contains only `index.html` and this audit report; no `firebase.json`, `firestore.rules`, or GitHub Actions Firebase Hosting workflow was found in the repository tree.
+- Therefore, this branch does not define a reproducible deployment configuration, and no Firebase deployment was performed from this environment.
+- Before production deployment, configure and verify the intended Hosting public directory, Firebase project target, protected deployment credentials, and a rollback path. Do not commit service-account keys or deployment tokens to the repository.
+- The fetched source was sufficient to validate the inline scripts present in the returned content, but the API response was shorter than the Git blob's declared byte size; treat this as partial source retrieval and require a complete checkout/build before release.
