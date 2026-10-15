@@ -97,3 +97,13 @@ These mitigations do **not** make the owner PIN secure against browser inspectio
 - GitHub Actions run [38825869546](https://github.com/almohandis-systems/luster-store/actions/runs/38825869546) parsed all eight inline JavaScript blocks with zero syntax errors.
 - The job correctly failed its release gate because the owner PIN still has a hard-coded default in client-side code. This is an intentional safety blocker, not a syntax failure.
 - Do not bypass this check to force a release. Resolve owner authentication on a trusted backend, test Firestore rules, and rerun the suite.
+
+
+## Follow-up update — 2026-10-16 (after the latest security pass)
+
+- Removed the remaining `'2222'` fallback from the duplicate owner-PIN getter as well as the first occurrence. When no owner PIN is configured in that browser/state, login now fails closed and displays a configuration warning instead of accepting a known default.
+- Re-parsed the latest `index.html`: all 8 inline JavaScript blocks passed syntax parsing with zero parser errors. This is static syntax validation only.
+- Strengthened the release checker so it explicitly blocks release while the owner PIN is read from/written to browser-controlled `localStorage`. The latest CI run failed for this expected reason: browser storage is not trusted server-side owner authentication.
+- Checked the audit branch for `firebase.json`, `.firebaserc`, `firestore.rules`, `functions/package.json`, and Cloud Functions entry points; these files are not present at those standard paths. The repository currently contains a single-file client app and does not provide a deployable trusted backend in the inspected paths.
+- Therefore, the owner authentication blocker cannot be safely resolved by merely changing the front-end PIN check. A trusted backend/Firebase Auth owner identity, server-enforced authorization and tested rules must be added and configured before production deployment.
+- Production `main` and Firebase Hosting were not changed. Do not merge or deploy until backend authentication and cross-device order tests pass.
