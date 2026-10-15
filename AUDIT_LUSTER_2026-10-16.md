@@ -71,3 +71,11 @@ These mitigations do **not** make the owner PIN secure against browser inspectio
 - Therefore, this branch does not define a reproducible deployment configuration, and no Firebase deployment was performed from this environment.
 - Before production deployment, configure and verify the intended Hosting public directory, Firebase project target, protected deployment credentials, and a rollback path. Do not commit service-account keys or deployment tokens to the repository.
 - The fetched source was sufficient to validate the inline scripts present in the returned content, but the API response was shorter than the Git blob's declared byte size; treat this as partial source retrieval and require a complete checkout/build before release.
+
+## Follow-up changes and checks (2026-10-16)
+
+- Updated the owner-dashboard Firestore-rules action in the isolated branch so it no longer offers the prior publicly readable/writable rules. It now shows a security warning and refuses to present a production ruleset until owner authorization is server-verifiable. This is a protective UI change, not a replacement for actually configuring Firebase Security Rules.
+- Re-fetched the current branch `index.html` blob and parsed all eight inline JavaScript blocks with the JavaScript parser. All eight passed syntax parsing; this is not browser/runtime verification.
+- Rechecked the current source: the old public Firestore rules template is absent; the owner PIN still has a client-side default fallback (`2222`). Static search did not find a Gemini integration. The AI menu-import workflow therefore remains unimplemented in the inspected HTML.
+- The current single-file app still needs a real owner authentication/authorization migration. Do not treat the UI warning alone as a security fix for Firestore itself.
+- No Firebase deployment, production Firestore rules change, browser test, cross-device order test, payment verification, or load test was performed. The application is not certified for commercial launch.
