@@ -19,7 +19,7 @@ for (let i = 0; i < scripts.length; i++) {
     parsedCount++;
   } catch (error) {
     syntaxErrors++;
-    console.error(\`FAIL: inline script #\${i + 1}: \${error.message}\`);
+    console.error('FAIL: inline script #' + (i + 1) + ': ' + error.message);
   }
 }
 
@@ -35,10 +35,10 @@ if (/oldEntered\s*===\s*['"]2222['"]|oldEntered\s*===\s*['"]0846['"]/i.test(html
   blockers.push('Owner PIN change accepts hard-coded bypass values.');
 }
 
-console.log(\`Parsed \${parsedCount} inline JavaScript blocks; found \${syntaxErrors} syntax errors.\`);
+console.log('Parsed ' + parsedCount + ' inline JavaScript blocks; found ' + syntaxErrors + ' syntax errors.');
 if (blockers.length) {
   console.error('RELEASE BLOCKERS:');
-  for (const item of blockers) console.error(\`- \${item}\`);
+  for (const item of blockers) console.error('- ' + item);
 }
 if (syntaxErrors || blockers.length) process.exit(1);
 console.log('PASS: static release checks.');
