@@ -15177,41 +15177,66 @@ class LusterOwnerDashboard {
 
   async checkPendingNewOrders() {
     try {
-      if (window.lusterCloudBridge) {
-        await window.lusterCloudBridge.fetchCloudOrders();
+      // Refresh cloud-backed cache first, but never treat a successful empty API
+      // response as proof that no local/Firestore orders exist.
+      if (window.lusterCloudBridge && typeof window.lusterCloudBridge.fetchCloudOrders === 'function') {
+        try { await window.lusterCloudBridge.fetchCloudOrders(); } catch (cloudErr) {}
       }
-      const res = await window.lusterApi('/api/orders');
-      if (res && res.ok) {
-        const data = await res.json();
-        const orders = data.orders || [];
-        const newOrders = orders.filter(o => o.statusCode === 'new');
-        const undeliveredOrders = orders.filter(o => o.statusCode !== 'delivered' && o.statusCode !== 'cancelled');
-        this.pendingNewOrdersCount = newOrders.length;
-        this.undeliveredOrdersCount = undeliveredOrders.length;
-        this.updateAlarmState();
-        const modal = document.getElementById('luster-owner-dashboard-modal');
-        if (modal && modal.classList.contains('active') && this.activeTab === 'orders') {
-          const body = modal.querySelector('.owner-suite-body');
-          if (body) {
-            const currentCardCount = body.querySelectorAll('.owner-order-card').length;
-            if (currentCardCount !== orders.length || newOrders.length > 0) {
-              this.renderOrdersTab(body);
-            }
+
+      let apiOrders = [];
+      try {
+        const res = await window.lusterApi('/api/orders');
+        if (res && res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data.orders)) apiOrders = data.orders;
+        }
+      } catch (apiErr) {}
+
+      let localOrders = [];
+      try {
+        const parsed = JSON.parse(localStorage.getItem('luster_orders') || '[]');
+        if (Array.isArray(parsed)) localOrders = parsed;
+      } catch (storageErr) {}
+
+      // Merge by stable order ID. Local/Firestore cache fills gaps when the
+      // API is empty/unavailable; API records take precedence when present.
+      const merged = new Map();
+      localOrders.forEach(o => { if (o && o.orderId) merged.set(o.orderId, o); });
+      apiOrders.forEach(o => {
+        if (!o || !o.orderId) return;
+        merged.set(o.orderId, { ...(merged.get(o.orderId) || {}), ...o });
+      });
+      const orders = Array.from(merged.values());
+      const newOrders = orders.filter(o => o.statusCode === 'new');
+      const undeliveredOrders = orders.filter(o => o.statusCode !== 'delivered' && o.statusCode !== 'cancelled');
+
+      this.pendingNewOrdersCount = newOrders.length;
+      this.undeliveredOrdersCount = undeliveredOrders.length;
+      this.updateAlarmState();
+
+      const modal = document.getElementById('luster-owner-dashboard-modal');
+      if (modal && modal.classList.contains('active') && this.activeTab === 'orders') {
+        const body = modal.querySelector('.owner-suite-body');
+        if (body) {
+          const currentCardCount = body.querySelectorAll('.owner-order-card').length;
+          if (currentCardCount !== orders.length || newOrders.length > 0) {
+            this.renderOrdersTab(body);
           }
         }
       }
     } catch (e) {
+      // Fail safely to local orders; keep the owner alert responsive offline.
       try {
         const local = JSON.parse(localStorage.getItem('luster_orders') || '[]');
-        const newOrders = local.filter(o => o.statusCode === 'new');
-        const undeliveredOrders = local.filter(o => o.statusCode !== 'delivered' && o.statusCode !== 'cancelled');
+        const orders = Array.isArray(local) ? local : [];
+        const newOrders = orders.filter(o => o && o.statusCode === 'new');
+        const undeliveredOrders = orders.filter(o => o && o.statusCode !== 'delivered' && o.statusCode !== 'cancelled');
         this.pendingNewOrdersCount = newOrders.length;
         this.undeliveredOrdersCount = undeliveredOrders.length;
         this.updateAlarmState();
       } catch (err) {}
     }
   }
-
   updateAlarmState() {
     // Non-stop siren that never stops until owner acknowledges orders
     if (this.pendingNewOrdersCount > 0) {
@@ -15622,42 +15647,71 @@ class LusterOwnerDashboard {
   }
 
   async acknowledgeAllNewOrders() {
+    // Stop locally first so the owner control responds immediately.
     this.alarmEngine.stopAlarm();
+
+    let apiOrders = [];
     try {
       const res = await window.lusterApi('/api/orders');
-      if (res.ok) {
+      if (res && res.ok) {
         const data = await res.json();
-        const newOrders = (data.orders || []).filter(o => o.statusCode === 'new');
-        for (const o of newOrders) {
-          await window.lusterApi('/api/orders/status', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              orderId: o.orderId,
-              statusCode: 'received',
-              actor: 'المالك (Owner)',
-              reason: 'اعتماد واستلام فوري عبر شريط التنبيه'
-            })
-          });
-        }
+        if (Array.isArray(data.orders)) apiOrders = data.orders;
       }
-    } catch (e) {
+    } catch (e) {}
+
+    let localOrders = [];
+    try {
+      const parsed = JSON.parse(localStorage.getItem('luster_orders') || '[]');
+      if (Array.isArray(parsed)) localOrders = parsed;
+    } catch (e) {}
+
+    // Always acknowledge cached orders too. Previously this happened only
+    // when the API threw; HTTP 200 with [] left local orders "new" and
+    // the polling loop immediately restarted the siren.
+    const byId = new Map();
+    localOrders.forEach(o => { if (o && o.orderId) byId.set(o.orderId, o); });
+    apiOrders.forEach(o => {
+      if (o && o.orderId) byId.set(o.orderId, { ...(byId.get(o.orderId) || {}), ...o });
+    });
+    const newOrders = Array.from(byId.values()).filter(o => o.statusCode === 'new');
+
+    localOrders = localOrders.map(o => {
+      if (o && o.statusCode === 'new') {
+        return { ...o, statusCode: 'received', status: 'تم الاستلام', receivedAt: new Date().toISOString() };
+      }
+      return o;
+    });
+    try { localStorage.setItem('luster_orders', JSON.stringify(localOrders)); } catch (e) {}
+
+    // Attempt server updates for every known new order; local stop remains
+    // functional if the API is offline, without falsely claiming cloud sync.
+    let cloudUpdatesSucceeded = true;
+    for (const o of newOrders) {
       try {
-        const local = JSON.parse(localStorage.getItem('luster_orders') || '[]');
-        local.forEach(o => {
-          if (o.statusCode === 'new') {
-            o.statusCode = 'received';
-            o.status = 'تم الاستلام';
-            o.receivedAt = new Date().toISOString();
-          }
+        const res = await window.lusterApi('/api/orders/status', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderId: o.orderId,
+            statusCode: 'received',
+            actor: 'المالك (Owner)',
+            reason: 'اعتماد واستلام عبر لوحة المالك'
+          })
         });
-        localStorage.setItem('luster_orders', JSON.stringify(local));
-      } catch (err) {}
+        if (!res || !res.ok) cloudUpdatesSucceeded = false;
+      } catch (e) {
+        cloudUpdatesSucceeded = false;
+      }
     }
 
     this.pendingNewOrdersCount = 0;
     this.updateAlarmState();
-    window.showToast('تم استلام جميع الطلبات الجديدة وتوقف رنين الإنذار بنجاح ✓', 'success');
+    window.showToast(
+      cloudUpdatesSucceeded
+        ? 'تم استلام الطلبات الجديدة وإيقاف الإنذار ✓'
+        : 'تم إيقاف الإنذار وتحديث الطلبات محليًا؛ تعذرت مزامنة بعض الحالات مع الخادم',
+      cloudUpdatesSucceeded ? 'success' : 'warning'
+    );
     const modal = document.getElementById('luster-owner-dashboard-modal');
     if (modal) this.renderTabContent(modal.querySelector('.owner-suite-body'));
   }
