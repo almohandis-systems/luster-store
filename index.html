@@ -12278,7 +12278,7 @@ class LusterStudio {
       <div class="owner-auth-card">
         <div style="font-size:38px; margin-bottom:8px;">🔐</div>
         <h3 style="color:var(--accent-gold); font-size:18px; font-weight:900; margin-bottom:6px;">LUSTER Studio — استوديو المالك</h3>
-        <p style="font-size:12px; color:var(--text-muted); margin-bottom:16px;">هذا القسم مخصص للمالك المصرح به فقط ومحمي بآلية تحقق أمنية. أدخل الرمز السري لمالك المنظومة (الافتراضي: 2222):</p>
+        <p style="font-size:12px; color:var(--text-muted); margin-bottom:16px;">هذا القسم مخصص للمالك المصرح به فقط ومحمي بآلية تحقق أمنية. أدخل الرمز السري الذي سبق أن عيّنه مالك المنظومة:</p>
         <input type="password" id="owner-auth-pin" maxlength="6" class="owner-pin-input" placeholder="••••" autofocus autocomplete="off">
         <div style="display:flex; gap:10px;">
           <button id="btn-owner-auth-submit" class="btn-luxury-gold" style="flex:1; padding:12px; font-size:14px;">تأكيد الدخول ✦</button>
@@ -12296,7 +12296,7 @@ class LusterStudio {
     const attemptLogin = () => {
       const pin = pinInput.value.trim();
       const validPin = this.getOwnerPin();
-      if (pin === validPin || pin === '2222' || pin === '0846') {
+      if (validPin && pin === validPin) {
         sessionStorage.setItem('luster_owner_authenticated', 'true');
         modal.style.display = 'none';
         window.showToast('تم التحقق بنجاح! مرحبًا بك في استوديو المالك ✦', 'success');
