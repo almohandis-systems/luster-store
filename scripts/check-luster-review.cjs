@@ -41,10 +41,10 @@ if (errors.length || missing.length) {
 }
 console.log('PASS: ' + parsed + ' inline JavaScript blocks parsed; approved search/share/options/stock checks found.');
 const knownRisks = [];
-if (/renderOrdersCenter\\(containerEl\\)[\\s\\S]{0,5000}?window\\.lusterApi\\(['"]\\/api\\/orders['"]/.test(html)) {
+if (html.includes('renderOrdersCenter(containerEl)') && html.includes("window.lusterApi('/api/orders'")) {
   knownRisks.push('Customer order view still fetches a broad order list; privacy needs server-side authorization.');
 }
-if (/getOwnerPin\\(\\)\\s*\\{[\\s\\S]{0,220}?localStorage\\.getItem/.test(html)) {
+if (html.includes('getOwnerPin()') && html.includes("localStorage.getItem('luster_owner_pin')")) {
   knownRisks.push('Owner PIN remains client-side; it is not a server-enforced authorization boundary.');
 }
 if (!fs.existsSync('firebase.json') || !fs.existsSync('firestore.rules')) {
