@@ -140,3 +140,34 @@ The owner approved the full repair and feature scope, with a mandatory review-be
 - Extended `scripts/check-inline-js.cjs` to fail if the data-mutating test suite loses its explicit isolated-test-mode guard, or if the developer panel regains its fabricated all-pass fallback.
 - The latest HTML source was re-parsed after the test-harness changes: all 8 inline JavaScript blocks parsed successfully with zero syntax errors.
 - Latest GitHub Actions run `38827472538` still fails at the release gate. This is expected while client-side PIN fallback/storage remains; the job does not certify commercial readiness.
+
+
+## Approved implementation pass — 2026-10-16
+
+Owner approval was received to implement the full proposed scope, preserve the owner PINs `2222` and `0846` and developer PIN `0846`, and present changes/report for review before any production deployment. No production deployment or merge was performed.
+
+### Changes implemented on the review branch
+- Added a product search field that filters visible products by Arabic/English title, description, and category text.
+- Added a direct product-share button on product cards. It uses the native share sheet where supported, with clipboard/WhatsApp fallback paths.
+- Added client-side stock guards to prevent adding products whose known stock is zero and to prevent adding more than the listed stock into the current cart.
+- Replaced decorative, flattened product option pills with per-option select controls. Choices are required when configured and are passed into cart line items as `selectedOptions`.
+- Fixed the `FREESHIP` calculation so a shipping coupon waives delivery cost rather than incorrectly subtracting the coupon value from the merchandise subtotal.
+- Connected the wallet/points action to a cart discount calculated from the current points balance and configured point value. Points are deducted only after the current client flow records the order successfully.
+- Preserved the existing owner and developer PIN values/entry behavior as explicitly requested.
+- Re-fetched and parsed the latest HTML: all 8 inline JavaScript blocks pass syntax parsing with zero parser errors.
+
+### Important limits / unresolved launch blockers
+- The static GitHub Actions release gate still fails, as expected, because the owner PIN is embedded/stored in browser-controlled client storage. The PIN values were not changed; however, front-end PINs are not a security boundary. A customer who inspects downloaded client code can discover client-side secrets. Do not describe owner/developer access as secure until server-enforced authorization is implemented.
+- Customer order privacy is not truly secured by the current architecture: the client requests a broad order list and filters it in the UI. A UI filter cannot prevent a modified client from reading the response. Server-side per-customer authorization and tested Firestore/security rules are required.
+- Stock is guarded in the current client/cart path, but inventory is not atomically reserved/decremented by a trusted transactional backend. Simultaneous purchases from multiple devices can still oversell; production stock guarantees remain unverified.
+- The referral endpoints exist in the client-side bridge, but their counts rely on local browser state/fingerprints and record link visits, not verified actual message sending or unique real people. They are not a trustworthy cross-device reward ledger.
+- No upload control for a payment receipt was found in the inspected customer checkout. Receipt upload/storage/review is not implemented in this pass.
+- No Gemini/AI menu-import workflow was found. No dedicated family-bundle authoring/presentation flow or flash-offer countdown management was found in the inspected HTML.
+- Stories currently have single `imageUrl` and `videoUrl` fields in the owner-created story shape; multiple images/videos per story have not been implemented.
+- Existing shipping zone configuration and the `FREESHIP` coupon are present in the state/code; their full owner-to-customer, cross-device behavior has not been browser-tested.
+- Product invoice/waybill printing and customer invoice sharing, complete theme palette/automatic contrast controls, all requested sound effects and owner sound controls, and social page management have not been verified or fully implemented.
+- The app includes a local standalone order fallback. This can show a success screen even when the remote API call fails, so it must not be mistaken for proof that the owner received a synchronized order.
+- No real browser/mobile end-to-end tests, two-device privacy/synchronization tests, payment tests, Firestore rules tests, concurrency/stock tests, or 10,000-user load tests have been run.
+
+### Release recommendation
+Keep this branch for review only. Do not merge or deploy yet. The next required engineering step is to add/verify the trusted Firebase/backend layer and rules, then test order privacy, synchronized order alerts, inventory transactions, payments, and media publishing end-to-end. The existing release gate must not be bypassed merely to make CI green.
