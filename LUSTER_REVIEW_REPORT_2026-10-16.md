@@ -66,3 +66,10 @@
 - Percentage/fixed merchandise discounts are capped at the cart subtotal; percentage values are capped at 100%. Shipping coupons now show a clear free-shipping confirmation and remain excluded from merchandise subtotal reduction.
 - This is client-side validation only. Coupon eligibility, final pricing, usage limits, and order totals still require trusted server-side validation before commercial use.
 - Commit: `3c9e60fa49e10eb9d05210580efd7747d5701410`.
+
+
+## Customer order-history privacy containment (2026-10-16)
+- Removed the customer order-history view's merge of the global in-memory cloud order list and its background request to the unscoped `GET /api/orders` endpoint. This prevents that screen from automatically importing other customers' records into its local display.
+- The view now displays only order records already saved in that browser. This is a containment measure, not the final multi-device solution: cross-device history remains unavailable until an authenticated server endpoint returns only orders authorized for the current customer.
+- The legacy API and other owner-side endpoints still need server-side authorization; this change does not secure them globally and does not make the app production-ready.
+- Commit: `cdcec919131a632412c8124b45df56a05ff013ff`.
