@@ -27,3 +27,9 @@
 
 ## قرار النشر
 لم يتم دمج الفرع إلى main ولم يتم النشر إلى Firebase Hosting. هذا الفرع للمراجعة فقط. لا يُوصف التطبيق بأنه جاهز تجاريًا قبل تأمين الخصوصية والمصادقة، واختبار مزامنة الطلبات والمخزون والدفع، وإتمام اختبارات الأجهزة والتحميل.
+
+
+## Additional UI interaction pass
+- Added a user-controlled sound toggle (off by default) and short Web Audio feedback for selected cart, checkout, coupon, quick-view, share, quantity, remove, and bottom-dock interactions. A distinct short success tone is requested after the order API confirms success. This needs real-device listening tests; browser autoplay/audio support varies.
+- Added targeted light-theme contrast overrides for product titles, descriptions, prices, option pills, dock labels, and drawer titles. This is not a global audit/fix of every inline white text color; remaining contrast cases still need visual review across all owner-selected palettes.
+- The sound toggle is a storefront-level preference saved in the current browser, not a cross-device owner setting. Owner-controlled sound policy and synchronized theme settings remain separate backlog items.
