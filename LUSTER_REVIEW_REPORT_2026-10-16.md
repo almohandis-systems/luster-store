@@ -73,3 +73,10 @@
 - The view now displays only order records already saved in that browser. This is a containment measure, not the final multi-device solution: cross-device history remains unavailable until an authenticated server endpoint returns only orders authorized for the current customer.
 - The legacy API and other owner-side endpoints still need server-side authorization; this change does not secure them globally and does not make the app production-ready.
 - Commit: `cdcec919131a632412c8124b45df56a05ff013ff`.
+
+
+## Review-gate coverage update (2026-10-16)
+- Expanded the static review script to require the new coupon validation, free-shipping confirmation, referral-code validation, and customer order-history containment markers.
+- Corrected the privacy risk check to inspect the actual customer order-history method rather than flagging any unrelated `/api/orders` call anywhere in the large storefront file.
+- The release gate still intentionally blocks production while client-side owner PIN authorization and missing Firebase configuration/rules remain unresolved.
+- Commit: `531417ff3c30dee411426cfe578c2aa901351f21`.
