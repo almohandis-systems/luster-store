@@ -3033,6 +3033,29 @@ body.lang-en .studio-inspector-panel {
   flex: 1 1 auto !important;
   overflow: hidden !important;
 }
+
+/* Approved light-theme readability improvements: keep product information legible without recoloring dark action controls. */
+html[data-bg-mode="light"] .product-title,
+html[data-bg-mode="light"] .product-body h3,
+html[data-bg-mode="light"] .product-card .product-price,
+html[data-bg-mode="light"] .product-card .product-meta,
+html[data-bg-mode="light"] .product-card .product-option-pill,
+html[data-bg-mode="light"] .dock-title,
+html[data-bg-mode="light"] .drawer-title {
+  color: var(--text-primary) !important;
+}
+html[data-bg-mode="light"] .product-desc-text,
+html[data-bg-mode="light"] .product-card .product-deposit-tag {
+  color: var(--text-secondary) !important;
+}
+html[data-bg-mode="light"] .product-card .product-option-pill {
+  background: var(--bg-secondary) !important;
+  border-color: var(--border-subtle) !important;
+}
+html[data-bg-mode="light"] .product-card .product-option-pill.active {
+  border-color: var(--accent-gold) !important;
+  font-weight: 900 !important;
+}
 </style>
   <script>
     // Safe Storage & Android content:// / file:// Dialog Guard with window.name Persistence
@@ -3255,7 +3278,10 @@ body.lang-en .studio-inspector-panel {
       <p class="section-subtitle products-section-subtitle" data-text-key="products.sectionSubtitle" style="font-size:13px; color:var(--text-muted); margin-top:4px;">قطع نادرة مصممة بعناية لتعكس الرقي والتميز مع إمكانية الدفع الجزئي (عربون) والتوصيل السريع.</p>
     </div>
     <div class="luster-product-search" style="margin:14px 0 18px; position:relative;">
-      <label for="luster-product-search-input" style="display:block; font-size:12px; font-weight:900; color:var(--text-secondary); margin-bottom:7px;">🔎 ابحث عن منتج أو وصفه</label>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:7px;">
+        <label for="luster-product-search-input" style="display:block; font-size:12px; font-weight:900; color:var(--text-secondary);">🔎 ابحث عن منتج أو وصفه</label>
+        <button type="button" id="luster-ui-sound-toggle" aria-pressed="false" title="تشغيل أو كتم أصوات التفاعل" style="padding:6px 10px;border:1px solid var(--border-subtle);border-radius:var(--radius-pill);background:var(--bg-secondary);color:var(--text-primary);font:inherit;font-size:11px;font-weight:800;">🔇 الأصوات: مغلقة</button>
+      </div>
       <input id="luster-product-search-input" type="search" autocomplete="off" placeholder="اكتب اسم المنتج أو كلمة من الوصف..." aria-label="البحث عن المنتجات"
         style="width:100%; min-height:46px; padding:12px 42px 12px 12px; border:1px solid var(--border-subtle); border-radius:var(--radius-md); background:var(--bg-card); color:var(--text-primary); font:inherit; font-size:14px; outline-offset:3px;">
     </div>
@@ -4567,6 +4593,57 @@ function applyDesignToDOM(designOrId) {
 
 
 // --- VIDEO STREAMING & SOUND TOGGLE HELPERS (Mobile Audio & Video Fix) ---
+// Optional, lightweight UI interaction sounds. Disabled by default; enabled only after an explicit user gesture.
+window.LusterUISounds = (() => {
+  let enabled = false;
+  let audioContext = null;
+  try { enabled = localStorage.getItem('luster_ui_sounds') === 'true'; } catch (e) {}
+  const refreshToggle = () => {
+    document.querySelectorAll('#luster-ui-sound-toggle').forEach(button => {
+      button.textContent = enabled ? '🔊 الأصوات: مفعّلة' : '🔇 الأصوات: مغلقة';
+      button.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+    });
+  };
+  const play = (kind = 'tap') => {
+    if (!enabled) return;
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      if (!audioContext || audioContext.state === 'closed') audioContext = new AudioCtx();
+      if (audioContext.state === 'suspended') audioContext.resume().catch(() => {});
+      const now = audioContext.currentTime;
+      const oscillator = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(kind === 'success' ? 660 : (kind === 'coupon' ? 540 : 420), now);
+      if (kind === 'success') oscillator.frequency.linearRampToValueAtTime(880, now + 0.10);
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(0.035, now + 0.018);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.14);
+      oscillator.connect(gain);
+      gain.connect(audioContext.destination);
+      oscillator.start(now);
+      oscillator.stop(now + 0.15);
+    } catch (e) {}
+  };
+  const toggle = () => {
+    enabled = !enabled;
+    try { localStorage.setItem('luster_ui_sounds', enabled ? 'true' : 'false'); } catch (e) {}
+    refreshToggle();
+    if (enabled) play('tap');
+  };
+  document.addEventListener('click', event => {
+    if (event.target.closest('#luster-ui-sound-toggle')) {
+      event.preventDefault();
+      toggle();
+      return;
+    }
+    if (event.target.closest('.btn-add-cart, #btn-submit-royal-order, .btn-apply-coupon, .dock-item, .btn-quick-view, .btn-share-product, .btn-cart-qty, .btn-cart-remove')) play('tap');
+  });
+  refreshToggle();
+  return { play, refreshToggle, isEnabled: () => enabled };
+})();
+
 function formatVideoUrlForStreaming(url) {
   if (!url) return '';
   const trimmed = url.trim();
@@ -10902,6 +10979,7 @@ class CommerceEngine {
             }
           } catch(e) {}
 
+          window.LusterUISounds?.play('success');
           // Show confirmation modal
           window.closeAllDrawers();
           window.showOrderSuccessModal(data.order);
