@@ -59,3 +59,10 @@
 - Wired both the Wallet and Points screens' points-use buttons to the same redemption method; the action now prepares a real cart discount instead of only opening the cart.
 - Pending point redemption is cleared when the cart is emptied, and the app again parses all 8 inline JavaScript blocks without syntax errors.
 - The review workflow intentionally remains blocked for production because the underlying order privacy/authentication/Firebase configuration issues remain unresolved.
+
+
+## Coupon input and free-shipping correction (2026-10-16)
+- Coupon application now safely rejects missing/overlong input, malformed local coupon entries, unsupported coupon types, and negative/non-numeric values instead of assuming every stored entry is well-formed.
+- Percentage/fixed merchandise discounts are capped at the cart subtotal; percentage values are capped at 100%. Shipping coupons now show a clear free-shipping confirmation and remain excluded from merchandise subtotal reduction.
+- This is client-side validation only. Coupon eligibility, final pricing, usage limits, and order totals still require trusted server-side validation before commercial use.
+- Commit: `3c9e60fa49e10eb9d05210580efd7747d5701410`.
