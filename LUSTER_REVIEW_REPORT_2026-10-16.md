@@ -33,3 +33,9 @@
 - Added a user-controlled sound toggle (off by default) and short Web Audio feedback for selected cart, checkout, coupon, quick-view, share, quantity, remove, and bottom-dock interactions. A distinct short success tone is requested after the order API confirms success. This needs real-device listening tests; browser autoplay/audio support varies.
 - Added targeted light-theme contrast overrides for product titles, descriptions, prices, option pills, dock labels, and drawer titles. This is not a global audit/fix of every inline white text color; remaining contrast cases still need visual review across all owner-selected palettes.
 - The sound toggle is a storefront-level preference saved in the current browser, not a cross-device owner setting. Owner-controlled sound policy and synchronized theme settings remain separate backlog items.
+
+
+## Release gate hardening (2026-10-16)
+- Updated `scripts/check-luster-review.cjs` so the review workflow exits with a blocking status when it detects the broad customer-order fetch, browser-side owner PIN storage, or missing root Firebase/rules configuration.
+- This is an intentional fail-closed release safeguard, not a claim that the underlying privacy/authentication defects have been fixed. The storefront must not be deployed as production-ready until the blockers are actually resolved and verified.
+- Commit: `7f73138772c8d4ec06b903605de576dc7a45b008`.
