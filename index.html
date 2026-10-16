@@ -3254,6 +3254,11 @@ body.lang-en .studio-inspector-panel {
       </div>
       <p class="section-subtitle products-section-subtitle" data-text-key="products.sectionSubtitle" style="font-size:13px; color:var(--text-muted); margin-top:4px;">قطع نادرة مصممة بعناية لتعكس الرقي والتميز مع إمكانية الدفع الجزئي (عربون) والتوصيل السريع.</p>
     </div>
+    <div class="products-search-wrap" style="margin:14px 0 18px; position:relative;">
+      <label for="luster-products-search" style="display:block; margin-bottom:6px; font-size:12px; font-weight:800; color:var(--text-muted);">ابحث عن منتج</label>
+      <input id="luster-products-search" type="search" autocomplete="off" placeholder="اكتب اسم المنتج أو وصفه..." aria-label="البحث عن المنتجات" style="display:block; width:100%; min-height:46px; box-sizing:border-box; padding:12px 44px 12px 14px; border:1px solid var(--border-subtle); border-radius:14px; background:var(--bg-card); color:var(--text-primary); font:inherit; outline-offset:3px;">
+      <span aria-hidden="true" style="position:absolute; right:14px; bottom:10px; font-size:19px;">🔎</span>
+    </div>
     <div id="products-grid" class="products-grid">
     <!-- Product 1 -->
     <div class="product-card interactive-element" data-product-id="prod_1" data-studio-editable data-studio-type="product">
@@ -9688,6 +9693,11 @@ class LusterStore {
     }
     if (!product.id) return;
 
+    if (product.stock !== undefined && product.stock !== null && product.stock !== '' && Number.isFinite(Number(product.stock)) && Number(product.stock) <= 0) {
+      if (window.showToast) window.showToast('نفد المخزون من هذا المنتج حاليًا.', 'error');
+      return false;
+    }
+
     if (!Array.isArray(this.cart)) {
       this.cart = this.loadLocal('luster_cart', []);
     }
@@ -9702,6 +9712,13 @@ class LusterStore {
     const existingIndex = this.cart.findIndex(item =>
       item && item.id === product.id && JSON.stringify(item.selectedOptions || {}) === JSON.stringify(opts)
     );
+    if (product.stock !== undefined && product.stock !== null && product.stock !== '' && Number.isFinite(Number(product.stock))) {
+      const alreadyInCart = this.cart.filter(item => item && item.id === product.id).reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+      if (alreadyInCart + qty > Number(product.stock)) {
+        if (window.showToast) window.showToast(`الكمية المتاحة من هذا المنتج ${Math.max(0, Number(product.stock) - alreadyInCart)} فقط.`, 'error');
+        return false;
+      }
+    }
 
     if (existingIndex > -1) {
       this.cart[existingIndex].quantity = (Number(this.cart[existingIndex].quantity) || 0) + qty;
@@ -25284,16 +25301,31 @@ class LusterApp {
     const currency = state.brand?.currency || 'ج.م';
 
     const visibleProducts = products.filter(p => !p.hidden);
-    const filtered = this.activeCategory === 'all'
+    const searchInput = document.getElementById('luster-products-search');
+    if (searchInput && !searchInput.dataset.lusterBound) {
+      searchInput.dataset.lusterBound = '1';
+      searchInput.addEventListener('input', () => {
+        this.textProductSearch = searchInput.value || '';
+        this.renderProducts();
+      });
+    }
+    const query = String(this.textProductSearch || (searchInput && searchInput.value) || '').trim().toLocaleLowerCase('ar');
+    const categoryFiltered = this.activeCategory === 'all'
       ? visibleProducts
       : visibleProducts.filter(p => p.category === this.activeCategory);
+    const filtered = categoryFiltered.filter(p => {
+      if (!query) return true;
+      const searchable = [p.titleAr, p.title, p.titleEn, p.descriptionAr, p.description, p.category]
+        .filter(Boolean).join(' ').toLocaleLowerCase('ar');
+      return searchable.includes(query);
+    });
 
     if (filtered.length === 0) {
       grid.innerHTML = `
         <div style="grid-column: 1 / -1; text-align:center; padding:48px 20px; background:var(--bg-secondary); border:1px dashed var(--border-gold); border-radius:var(--radius-lg);">
-          <div style="font-size:42px; margin-bottom:10px;">✨</div>
-          <h3 style="font-size:17px; font-weight:900; color:var(--accent-gold); margin-bottom:6px;">جارٍ تحديث المنتجات في هذا القسم</h3>
-          <p style="font-size:13px; color:var(--text-muted);">ترقبوا أحدث منتجات وعروض LUSTER قريباً.</p>
+          <div style="font-size:42px; margin-bottom:10px;">${query ? '🔎' : '✨'}</div>
+          <h3 style="font-size:17px; font-weight:900; color:var(--accent-gold); margin-bottom:6px;">${query ? 'لا توجد منتجات مطابقة لبحثك' : 'جارٍ تحديث المنتجات في هذا القسم'}</h3>
+          <p style="font-size:13px; color:var(--text-muted);">${query ? 'جرّب كلمة أخرى أو امسح البحث لعرض المنتجات.' : 'ترقبوا أحدث منتجات وعروض LUSTER قريباً.'}</p>
         </div>
       `;
       return;
@@ -25388,12 +25420,14 @@ class LusterApp {
               </div>
             ` : ''}
             <div class="product-actions">
-              <button class="btn-add-cart" data-id="${prod.id}">
-                <span>🛒</span> أضف للسلة
+              ${(prod.stock !== undefined && Number.isFinite(Number(prod.stock)) && Number(prod.stock) <= 0) ? '<span class="product-stock-status" role="status" style="font-size:11px;font-weight:900;color:#DC2626;">نفد من المخزون مؤقتًا</span>' : ''}
+              <button class="btn-add-cart" data-id="${prod.id}" ${(prod.stock !== undefined && Number.isFinite(Number(prod.stock)) && Number(prod.stock) <= 0) ? 'disabled aria-disabled="true" title="نفد المخزون"' : ''}>
+                <span>🛒</span> ${(prod.stock !== undefined && Number.isFinite(Number(prod.stock)) && Number(prod.stock) <= 0) ? 'نفد المخزون' : 'أضف للسلة'}
               </button>
               <button class="btn-quick-view" data-id="${prod.id}" title="عرض التفاصيل الكاملة">
                 👁️
               </button>
+              <button class="btn-share-product" data-id="${prod.id}" type="button" title="مشاركة رابط المنتج" aria-label="مشاركة المنتج" style="min-width:40px;border-radius:10px;border:1px solid var(--border-subtle);background:var(--bg-secondary);color:var(--text-primary);cursor:pointer;">🔗</button>
             </div>
           </div>
         </div>
@@ -25435,12 +25469,57 @@ class LusterApp {
         e.stopPropagation();
         const pid = btn.dataset.id;
         const prod = products.find(p => p.id === pid);
-        if (prod) {
-          this.store.addToCart(prod, 1);
-          this.renderDockBar();
-          window.showToast(`تمت إضافة ${prod.titleAr} إلى السلة! 🛒`, 'success');
-          window.openCartDrawer();
+        if (!prod) return;
+        if (prod.stock !== undefined && Number.isFinite(Number(prod.stock)) && Number(prod.stock) <= 0) {
+          window.showToast('نفد المخزون من هذا المنتج حاليًا.', 'error');
+          this.renderProducts();
+          return;
         }
+        const selectedOptions = {};
+        const card = btn.closest('.product-card');
+        card?.querySelectorAll('.product-options-group').forEach(group => {
+          const name = group.dataset.optionName || 'اختيار';
+          const selected = group.querySelector('.product-option-pill.active');
+          if (selected) selectedOptions[name] = selected.dataset.optionValue || selected.textContent.trim();
+        });
+        const added = this.store.addToCart(prod, 1, selectedOptions);
+        if (added === false) return;
+        this.renderDockBar();
+        window.showToast(`تمت إضافة ${prod.titleAr} إلى السلة! 🛒`, 'success');
+        window.openCartDrawer();
+      };
+    });
+
+    grid.querySelectorAll('.btn-share-product').forEach(btn => {
+      btn.onclick = async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const prod = products.find(p => p.id === btn.dataset.id);
+        if (!prod) return;
+        const shareUrl = window.location.origin + window.location.pathname + window.location.search + '#product=' + encodeURIComponent(prod.id);
+        const shareText = `${prod.titleAr || prod.title || 'منتج من LUSTER'} - ${prod.price || ''} ${currency}\\n${shareUrl}`;
+        try {
+          if (navigator.share) {
+            await navigator.share({ title: prod.titleAr || 'LUSTER', text: shareText, url: shareUrl });
+          } else if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(shareUrl);
+            window.showToast('تم نسخ رابط المنتج. يمكنك مشاركته الآن.', 'success');
+          } else {
+            window.open('https://wa.me/?text=' + encodeURIComponent(shareText), '_blank', 'noopener,noreferrer');
+          }
+        } catch (err) {
+          if (err && err.name !== 'AbortError') window.showToast('تعذرت المشاركة الآن. حاول مرة أخرى.', 'error');
+        }
+      };
+    });
+
+    grid.querySelectorAll('.product-option-pill').forEach(pill => {
+      pill.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const group = pill.closest('.product-options-group');
+        group?.querySelectorAll('.product-option-pill').forEach(item => item.classList.remove('active'));
+        pill.classList.add('active');
       };
     });
 
