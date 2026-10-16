@@ -80,3 +80,5 @@
 - Corrected the privacy risk check to inspect the actual customer order-history method rather than flagging any unrelated `/api/orders` call anywhere in the large storefront file.
 - The release gate still intentionally blocks production while client-side owner PIN authorization and missing Firebase configuration/rules remain unresolved.
 - Commit: `531417ff3c30dee411426cfe578c2aa901351f21`.
+
+- Follow-up validation: GitHub Actions exposed a missing comma in the expanded static-check list; corrected in commit `92d597d2a2a77746c1a57ad0346f55ed5ca9b39d`. Waiting for the new workflow result before treating the review gate as passing.
