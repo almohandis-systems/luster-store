@@ -171,3 +171,12 @@ Owner approval was received to implement the full proposed scope, preserve the o
 
 ### Release recommendation
 Keep this branch for review only. Do not merge or deploy yet. The next required engineering step is to add/verify the trusted Firebase/backend layer and rules, then test order privacy, synchronized order alerts, inventory transactions, payments, and media publishing end-to-end. The existing release gate must not be bypassed merely to make CI green.
+
+
+## Additional cart and test-report corrections — 2026-10-16
+
+- Added a second stock preflight when the customer changes cart quantities and immediately before checkout. This catches stale/known stock limits in the current browser, but it is not an atomic cross-device inventory reservation.
+- Fixed the points button: it now computes a discount from the configured point value and current points balance, applies that discount to the cart, and redeems points only after the current flow records an order. This remains client-side accounting until backed by a trusted order/loyalty transaction.
+- Corrected the internal automated-test summary so it no longer claims “100% commercial readiness” merely because local bridge checks run.
+- Confirmed in the current review branch that the owner PIN login still accepts `2222` and `0846`, and the developer entry still checks `0846`. These values were preserved as requested.
+- Latest local static validation after these edits: 8 inline JavaScript blocks parsed with zero syntax errors. GitHub Actions release gate remains failed due to the existing client-side owner PIN/default and browser-storage authentication blockers. No production deployment was performed.
