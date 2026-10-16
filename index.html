@@ -25332,6 +25332,7 @@ class LusterApp {
     }
 
     const partialCfg = state.paymentSettings?.partialPayment || { enabled: false, depositPercentage: 20, depositType: 'percent', fixedDepositAmount: 50 };
+    const escapeOptionText = value => String(value ?? '').replace(/[&<>\"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', "'": '&#39;' }[ch]));
 
     grid.innerHTML = filtered.map(prod => {
       const artSvg = Artwork[prod.image] || Artwork.detergent_powder;
@@ -25399,11 +25400,23 @@ class LusterApp {
             ${prod.descriptionAr ? `
               <p class="product-desc-text">${prod.descriptionAr}</p>
             ` : ''}
-            ${allOptionChoices.length > 0 ? `
-              <div class="product-options-pills">
-                ${allOptionChoices.map((ch, cIdx) => `
-                  <span class="product-option-pill ${cIdx === 0 ? 'active' : ''}" onclick="this.parentElement.querySelectorAll('.product-option-pill').forEach(p=>p.classList.remove('active')); this.classList.add('active'); event.stopPropagation();">${ch}</span>
-                `).join('')}
+            ${Array.isArray(prod.options) && prod.options.some(opt => opt && Array.isArray(opt.choices) && opt.choices.length) ? `
+              <div class="product-options-pills" style="display:grid;gap:8px;">
+                ${prod.options.filter(opt => opt && Array.isArray(opt.choices) && opt.choices.length).map((opt, optIdx) => {
+                  const optionName = escapeOptionText(opt.nameAr || opt.name || opt.titleAr || ('اختيار ' + (optIdx + 1)));
+                  return `
+                    <label class="product-options-group" data-option-name="${optionName}" style="display:grid;gap:4px;font-size:12px;color:var(--text-muted);">
+                      <span>${optionName}</span>
+                      <select class="product-option-select" data-option-name="${optionName}" style="width:100%;padding:8px;border-radius:9px;border:1px solid var(--border-subtle);background:var(--bg-card);color:var(--text-primary);font:inherit;">
+                        <option value="">اختر ${optionName}</option>
+                        ${opt.choices.filter(Boolean).map(choice => {
+                          const safeChoice = escapeOptionText(typeof choice === 'object' ? (choice.labelAr || choice.nameAr || choice.label || choice.value || '') : choice);
+                          return safeChoice ? `<option value="${safeChoice}">${safeChoice}</option>` : '';
+                        }).join('')}
+                      </select>
+                    </label>
+                  `;
+                }).join('')}
               </div>
             ` : ''}
             <div class="product-meta">
@@ -25477,11 +25490,15 @@ class LusterApp {
         }
         const selectedOptions = {};
         const card = btn.closest('.product-card');
-        card?.querySelectorAll('.product-options-group').forEach(group => {
-          const name = group.dataset.optionName || 'اختيار';
-          const selected = group.querySelector('.product-option-pill.active');
-          if (selected) selectedOptions[name] = selected.dataset.optionValue || selected.textContent.trim();
-        });
+        const optionSelects = card ? Array.from(card.querySelectorAll('.product-option-select')) : [];
+        for (const select of optionSelects) {
+          if (!select.value) {
+            window.showToast('اختر ' + (select.dataset.optionName || 'خيارات المنتج') + ' أولًا.', 'error');
+            select.focus();
+            return;
+          }
+          selectedOptions[select.dataset.optionName || 'اختيار'] = select.value;
+        }
         const added = this.store.addToCart(prod, 1, selectedOptions);
         if (added === false) return;
         this.renderDockBar();
