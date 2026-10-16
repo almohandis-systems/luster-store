@@ -10274,6 +10274,35 @@ class CommerceEngine {
     const usePointsBtn = containerEl.querySelector('#btn-use-points-in-cart');
     if (usePointsBtn) {
       usePointsBtn.onclick = () => {
+        const subtotal = this.store.getCartSubtotal();
+        const points = this.store.points || { balance: 0, spent: 0 };
+        const pointValue = Math.max(0, Number(state.loyalty?.pointValueEGP) || 0.1);
+        if (!this.store.cart || this.store.cart.length === 0 || subtotal <= 0) {
+          window.showToast('أضف منتجات إلى السلة أولًا، ثم طبّق خصم النقاط.', 'info');
+          window.openCartDrawer();
+          return;
+        }
+        if (!(Number(points.balance) > 0) || !(pointValue > 0)) {
+          window.showToast('لا يوجد رصيد نقاط متاح للاستخدام حاليًا.', 'error');
+          return;
+        }
+        const discount = Math.min(subtotal, Math.floor(Number(points.balance) * pointValue));
+        const pointsToRedeem = Math.min(Number(points.balance), Math.ceil(discount / pointValue));
+        if (!(discount > 0) || !(pointsToRedeem > 0)) {
+          window.showToast('رصيد النقاط لا يكفي لتطبيق خصم على هذه السلة.', 'error');
+          return;
+        }
+        this.store.activeCoupon = {
+          id: 'points_redemption',
+          code: 'POINTS',
+          type: 'points',
+          nameAr: 'خصم النقاط',
+          calculatedDiscount: discount,
+          pointsToRedeem,
+          pointValueEGP: pointValue
+        };
+        this.store.emit('COUPON_APPLIED', this.store.activeCoupon);
+        window.showToast(`تم تطبيق خصم ${discount} ج.م باستخدام ${pointsToRedeem} نقطة. تُخصم النقاط بعد تسجيل الطلب.`, 'success');
         window.openCartDrawer();
       };
     }
@@ -10844,6 +10873,15 @@ class CommerceEngine {
             localStorage.setItem('luster_customer_phone', cleanPhone);
           } catch(e) {}
 
+          if (this.store.activeCoupon?.type === 'points') {
+            const redeem = Math.min(Number(this.store.points?.balance) || 0, Number(this.store.activeCoupon.pointsToRedeem) || 0);
+            if (redeem > 0) {
+              this.store.points.balance = Math.max(0, (Number(this.store.points.balance) || 0) - redeem);
+              this.store.points.spent = (Number(this.store.points.spent) || 0) + redeem;
+              this.store.saveLocal('luster_points', this.store.points);
+              this.store.emit('POINTS_UPDATED', this.store.points);
+            }
+          }
           // Award loyalty points
           const earnedPts = Math.round(total / 10);
           this.store.addPoints(earnedPts, `نقاط مكتسبة عن طلب رقم ${data.order.orderId}`);
@@ -10918,6 +10956,15 @@ class CommerceEngine {
           localStorage.setItem('luster_customer_phone', cleanPhone);
         } catch(e) {}
 
+        if (this.store.activeCoupon?.type === 'points') {
+          const redeem = Math.min(Number(this.store.points?.balance) || 0, Number(this.store.activeCoupon.pointsToRedeem) || 0);
+          if (redeem > 0) {
+            this.store.points.balance = Math.max(0, (Number(this.store.points.balance) || 0) - redeem);
+            this.store.points.spent = (Number(this.store.points.spent) || 0) + redeem;
+            this.store.saveLocal('luster_points', this.store.points);
+            this.store.emit('POINTS_UPDATED', this.store.points);
+          }
+        }
         this.store.clearCart();
         this.store.removeCoupon();
 
