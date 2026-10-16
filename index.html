@@ -8694,7 +8694,7 @@ class LusterCloudBridge {
       };
     };
 
-    // 1. ORDERS ENDPOINTS
+    // 1. Orders routes handled by the client bridge unless a trusted backend is configured
     if (cleanUrl === '/api/orders') {
       if (method === 'POST') {
         const body = typeof options.body === 'string' ? JSON.parse(options.body) : (options.body || {});
@@ -9300,7 +9300,7 @@ DATA:${JSON.stringify({ type: 'NEW_ORDER', order: newOrder })}`;
       return buildRes({ success: true, history: hist });
     }
 
-    // 10. REFERRALS & REAL SHARE VERIFICATION ENGINE
+    // 10. REFERRAL VISIT COUNTS (client bridge; does not verify actual message sending or unique real people)
     if (cleanUrl === '/api/referrals/status') {
       const qCode = url.includes('code=') ? decodeURIComponent(url.split('code=')[1].split('&')[0]) : 'default';
       let counts = {};
@@ -9461,7 +9461,7 @@ if (typeof window !== 'undefined') {
 }
 
 // منتجات LUSTER - Client State & Persistence Engine
-// Real-time synchronization via Server-Sent Events (SSE) + LocalStorage Offline Support
+// Client-side state persistence and best-effort cloud bridge; cross-device reliability must be verified
 
 class LusterStore {
   grantWheelBonusSpins(count = 1) {
@@ -25913,7 +25913,7 @@ async function runLusterAutomatedTests(log = console.log) {
   log('==================================================\n');
 
   try {
-    // Test 1: Fetch State from Backend API
+    // Test 1: Fetch state through the LUSTER API bridge (may use local fallback)
     log('--- المرحلة 1: اختبار الخادم وقاعدة البيانات والحالة المباشرة ---');
     const stateRes = await window.lusterApi('/api/state');
     assert(stateRes.ok, '1. اتصال API واجهة الحالة الأساسية /api/state يعمل بنجاح');
@@ -25999,7 +25999,7 @@ async function runLusterAutomatedTests(log = console.log) {
     const historyData = await historyRes.json();
     assert(historyData.history && historyData.history.length > 0, '15. تسجيل التعديلات في سجل التدقيق والمراجعة الكامل (Audit Log)');
 
-    // Test 5: Referral Challenge & Anti-Abuse System
+    // Test 5: Referral visit-count behavior in the local bridge (not proof of real shares or identity)
     log('\n--- المرحلة 5: اختبار مسابقة الإحالة وتتبع الزيارات ومنع التلاعب ---');
     const testRefCode = 'TEST_REF_' + Math.floor(Math.random() * 10000);
     const refClick1 = await window.lusterApi('/api/referrals/click', {
@@ -26019,7 +26019,7 @@ async function runLusterAutomatedTests(log = console.log) {
     const refDataDup = await refClickDup.json();
     assert(refDataDup.success && refDataDup.isDuplicate && refDataDup.count === 1, '17. نظام الحماية ضد التلاعب يرفض احتساب نفس الزائر مرتين (Anti-Abuse)');
 
-    // Test 6: Server-Verified Spin & Win Logic
+    // Test 6: Local bridge spin logic (not server-verified without a trusted backend)
     log('\n--- المرحلة 6: اختبار عجلة الحظ الملكية والجوائز العشوائية ---');
     const spinRes = await window.lusterApi('/api/spin', { method: 'POST' });
     const spinData = await spinRes.json();
