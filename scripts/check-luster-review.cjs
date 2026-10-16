@@ -30,6 +30,11 @@ const required = [
   ['points redemption logic', 'applyPointsToCart() {'],
   ['points redemption consumed after confirmed order', 'consumePointsRedemption('],
   ['shipping coupon only affects delivery', 'Shipping coupons waive delivery fees; they must never discount merchandise.'],
+  ['coupon input validation', "const normalizedCode = typeof code === 'string' ? code.trim() : ''"],
+  ['free shipping confirmation', 'تم تطبيق كوبون الشحن المجاني بنجاح!'],
+  ['referral code validation', "error: 'invalid_referral_code'"],
+  ['customer order history privacy containment', 'Never merge the global in-memory cloud order list into a customer']
+
   ['no fake offline order success', 'processing local standalone fallback order']
 ];
 const missing = required.filter(([label, marker]) => {
@@ -44,8 +49,13 @@ if (errors.length || missing.length) {
 }
 console.log('PASS: ' + parsed + ' inline JavaScript blocks parsed; approved search/share/options/stock checks found.');
 const knownRisks = [];
-if (html.includes('renderOrdersCenter(containerEl)') && html.includes("window.lusterApi('/api/orders'")) {
-  knownRisks.push('Customer order view still fetches a broad order list; privacy needs server-side authorization.');
+const customerOrdersStart = html.indexOf('async renderOrdersCenter(containerEl)');
+const customerOrdersEnd = html.indexOf('_renderOrdersCenterDOM(containerEl', customerOrdersStart);
+const customerOrdersView = customerOrdersStart >= 0 && customerOrdersEnd > customerOrdersStart
+  ? html.slice(customerOrdersStart, customerOrdersEnd)
+  : '';
+if (!customerOrdersView || customerOrdersView.includes("window.lusterApi('/api/orders'") || customerOrdersView.includes('window.lusterCloudBridge.orders')) {
+  knownRisks.push('Customer order view still reads an unscoped global order list; privacy needs a server-authorized customer endpoint.');
 }
 if (html.includes('getOwnerPin()') && html.includes("localStorage.getItem('luster_owner_pin')")) {
   knownRisks.push('Owner PIN remains client-side; it is not a server-enforced authorization boundary.');
