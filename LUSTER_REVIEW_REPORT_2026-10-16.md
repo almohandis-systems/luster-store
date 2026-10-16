@@ -45,3 +45,11 @@
 - Corrected the `FREESHIP`/shipping-coupon calculation so a shipping coupon waives delivery charges rather than subtracting its configured value from the merchandise subtotal.
 - Implemented a cart points-redemption action using the current local points balance and configured point value, capped at 20% of merchandise subtotal. The chosen points discount is included in the order payload and redeemed points are consumed only after the order API confirms success.
 - These calculations still require runtime tests with real coupon/zone/points configurations. Customer points are currently browser-local and are not a secure shared loyalty ledger across devices; cross-device balances need authenticated server-side storage.
+
+
+## Referral counter correction (2026-10-16)
+- Hardened referral status query parsing: malformed percent-encoding and empty/overlong/control-character codes now return a clear 400-style error instead of throwing through the request handler.
+- Corrected the customer-facing label to describe the value as recorded referral-link visits, not confirmed friends who joined. Client-side click counters cannot prove a WhatsApp message was sent, a distinct real person joined, or a qualifying purchase completed.
+- Validation after this edit: all 8 inline JavaScript blocks parse with zero syntax errors; referral endpoint, validation, and truthful label markers are present; owner/developer code-path markers remain present.
+- Still not complete: trusted server-side referral attribution, abuse prevention, and reward issuance tied to a verified qualifying event.
+- Commit: `2eef58a615ea47dfc409473120d93987c22afc84`.
