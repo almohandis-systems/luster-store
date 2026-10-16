@@ -25409,6 +25409,7 @@ class LusterApp {
       const hasRealImg = Boolean(prod.image && (prod.image.startsWith('blob:') || prod.image.startsWith('data:') || prod.image.startsWith('http') || prod.image.startsWith('/')));
       const hasRealVideo = Boolean(prod.video && (prod.video.startsWith('blob:') || prod.video.startsWith('data:') || prod.video.startsWith('http') || prod.video.startsWith('/')));
       const gallery = Array.isArray(prod.gallery) ? prod.gallery.filter(Boolean) : [];
+      const isOutOfStock = prod.stock !== undefined && prod.stock !== null && prod.stock !== '' && Number(prod.stock) <= 0;
 
       // Calculate product deposit amount accurately
       const showDeposit = !prod.hidePrice && (partialCfg.enabled !== false) && (prod.depositEnabled !== false);
@@ -25491,8 +25492,8 @@ class LusterApp {
               </div>
             ` : ''}
             <div class="product-actions">
-              <button class="btn-add-cart" data-id="${prod.id}" ${Number.isFinite(Number(prod.stock)) && Number(prod.stock) <= 0 ? 'disabled aria-disabled="true"' : ''} style="${Number.isFinite(Number(prod.stock)) && Number(prod.stock) <= 0 ? 'opacity:.55;cursor:not-allowed;' : ''}">
-                ${Number.isFinite(Number(prod.stock)) && Number(prod.stock) <= 0 ? 'نفد من المخزون مؤقتًا' : '<span>🛒</span> أضف للسلة'}
+              <button class="btn-add-cart" data-id="${prod.id}" ${isOutOfStock ? 'disabled aria-disabled="true"' : ''} style="${isOutOfStock ? 'opacity:.55;cursor:not-allowed;' : ''}">
+                ${isOutOfStock ? 'نفد من المخزون مؤقتًا' : '<span>🛒</span> أضف للسلة'}
               </button>
               <button class="btn-quick-view" data-id="${prod.id}" title="عرض التفاصيل الكاملة" aria-label="عرض تفاصيل المنتج">👁️</button>
               <button type="button" class="btn-share-product" data-id="${prod.id}" title="مشاركة رابط المنتج" aria-label="مشاركة المنتج" style="min-width:38px;padding:7px 9px;border:1px solid var(--border-subtle);border-radius:var(--radius-sm);background:var(--bg-secondary);color:var(--text-primary);font-size:16px;">🔗</button>
