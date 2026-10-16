@@ -33,7 +33,7 @@ const required = [
   ['coupon input validation', "const normalizedCode = typeof code === 'string' ? code.trim() : ''"],
   ['free shipping confirmation', 'تم تطبيق كوبون الشحن المجاني بنجاح!'],
   ['referral code validation', "error: 'invalid_referral_code'"],
-  ['customer order history privacy containment', 'Never merge the global in-memory cloud order list into a customer'],
+  ['customer order history privacy containment', 'SECURITY: Never merge the global in-memory cloud order list'],
   ['no fake offline order success', 'processing local standalone fallback order']
 ];
 const missing = required.filter(([label, marker]) => {
