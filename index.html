@@ -9837,6 +9837,7 @@ class LusterStore {
   removeFromCart(index) {
     if (index >= 0 && index < this.cart.length) {
       this.cart.splice(index, 1);
+      if (this.cart.length === 0) this.activePointsRedemption = null;
       this.saveLocal('luster_cart', this.cart);
       this.emit('CART_UPDATED', this.cart);
     }
@@ -9862,6 +9863,7 @@ class LusterStore {
 
   clearCart() {
     this.cart = [];
+    this.activePointsRedemption = null;
     this.saveLocal('luster_cart', this.cart);
     this.emit('CART_UPDATED', this.cart);
   }
