@@ -10415,6 +10415,9 @@ class CommerceEngine {
     const usePointsBtn = containerEl.querySelector('#btn-use-points-in-cart');
     if (usePointsBtn) {
       usePointsBtn.onclick = () => {
+        const result = this.store.applyPointsToCart();
+        if (result.success) window.showToast(result.message, 'success');
+        else window.showToast(result.message, 'error');
         window.openCartDrawer();
       };
     }
