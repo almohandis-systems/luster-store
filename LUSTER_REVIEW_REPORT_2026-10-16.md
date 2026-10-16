@@ -39,3 +39,9 @@
 - Updated `scripts/check-luster-review.cjs` so the review workflow exits with a blocking status when it detects the broad customer-order fetch, browser-side owner PIN storage, or missing root Firebase/rules configuration.
 - This is an intentional fail-closed release safeguard, not a claim that the underlying privacy/authentication defects have been fixed. The storefront must not be deployed as production-ready until the blockers are actually resolved and verified.
 - Commit: `7f73138772c8d4ec06b903605de576dc7a45b008`.
+
+
+## Commerce calculation fixes
+- Corrected the `FREESHIP`/shipping-coupon calculation so a shipping coupon waives delivery charges rather than subtracting its configured value from the merchandise subtotal.
+- Implemented a cart points-redemption action using the current local points balance and configured point value, capped at 20% of merchandise subtotal. The chosen points discount is included in the order payload and redeemed points are consumed only after the order API confirms success.
+- These calculations still require runtime tests with real coupon/zone/points configurations. Customer points are currently browser-local and are not a secure shared loyalty ledger across devices; cross-device balances need authenticated server-side storage.
