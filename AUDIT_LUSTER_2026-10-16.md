@@ -107,3 +107,20 @@ These mitigations do **not** make the owner PIN secure against browser inspectio
 - Checked the audit branch for `firebase.json`, `.firebaserc`, `firestore.rules`, `functions/package.json`, and Cloud Functions entry points; these files are not present at those standard paths. The repository currently contains a single-file client app and does not provide a deployable trusted backend in the inspected paths.
 - Therefore, the owner authentication blocker cannot be safely resolved by merely changing the front-end PIN check. A trusted backend/Firebase Auth owner identity, server-enforced authorization and tested rules must be added and configured before production deployment.
 - Production `main` and Firebase Hosting were not changed. Do not merge or deploy until backend authentication and cross-device order tests pass.
+
+
+## Approved execution scope — owner confirmation (2026-10-16)
+
+The owner approved the full repair and feature scope, with a mandatory review-before-release policy. This approval authorizes work on the isolated review branch only; it does not authorize merging to `main`, changing live Firebase settings/data, or deploying to Hosting.
+
+### Login behavior must be preserved
+- Preserve the owner entry codes `2222` and `0846`, and the developer entry code `0846`, exactly as requested.
+- The audit branch commit `77880fd8756c6f49b3361fdaef6b0f37c5ff88e6` restores the existing `2222` fallback behavior in both PIN getter locations after an earlier change altered it.
+- Do not change these values or their intended entry behavior without a new explicit approval. This preservation requirement does not remove the separate technical finding that browser-side PIN checks/storage are not server-enforced authorization; the application must not be described as commercially secure until that architecture is addressed without locking out the owner.
+
+### Execution status and release gate
+- Work remains on `work/full-luster-audit`; draft PR #2 is open and unmerged. PR #1 (order-alert fallback/acknowledgment) is also a draft and unmerged.
+- Latest static CI run for commit `77880fd8756c6f49b3361fdaef6b0f37c5ff88e6` (run `38826852662`) failed at the release-check step. The JavaScript syntax check previously parsed all eight inline blocks with zero syntax errors, but this does not establish browser/runtime correctness. The release check is currently blocked by client-side PIN storage, which needs an approved, tested backend migration that preserves the required entry codes.
+- No changes have been merged or deployed. Do not publish until the owner reviews the full diff/report and explicitly approves a later release.
+- The requested commercial features remain tracked as implementation work, not completed claims. Prioritize order integrity/privacy, stock and checkout correctness, then promotions/shipping/payments/invoices, referrals, media/AI import, themes/sounds, and complete cross-device/mobile tests.
+- For every feature, record one of: `implemented and tested`, `implemented but not runtime-tested`, `blocked by missing backend/service/configuration`, or `not implemented`. Do not mark a feature complete from static search alone.
