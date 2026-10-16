@@ -11107,53 +11107,16 @@ class CommerceEngine {
       }
     } catch (e) {}
 
-    if (window.lusterCloudBridge && Array.isArray(window.lusterCloudBridge.orders)) {
-      window.lusterCloudBridge.orders.forEach(co => {
-        if (co && co.orderId && !orders.some(o => o.orderId === co.orderId)) {
-          orders.push(co);
-        }
-      });
-    }
-
+    // SECURITY: Never merge the global in-memory/cloud order collection into a customer's
+    // order history. The legacy GET /api/orders endpoint returns a broad list and is not
+    // an authenticated customer-scoped endpoint. Until a trusted server endpoint verifies
+    // the signed-in customer and filters by an immutable owner ID, show only orders saved
+    // on this browser for this customer. This intentionally disables cross-device history
+    // here rather than risk exposing other customers' names, phones, addresses, or orders.
     orders.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
 
-    // 2. Render the Orders Center DOM IMMEDIATELY in 0ms!
+    // Render only browser-local customer orders; do not request the unscoped order list.
     this._renderOrdersCenterDOM(containerEl, orders);
-
-    // 3. Silently fetch cloud updates in background without wiping out the DOM or blocking the user!
-    if (typeof window !== 'undefined' && window.location && window.location.protocol && window.location.protocol.startsWith('http')) {
-      const abortCtrl = new AbortController();
-      const timeoutId = setTimeout(() => abortCtrl.abort(), 2500);
-      window.lusterApi('/api/orders', { signal: abortCtrl.signal })
-        .then(r => r.json())
-        .then(data => {
-          clearTimeout(timeoutId);
-          if (data && Array.isArray(data.orders) && data.orders.length > 0) {
-            let hasChanges = false;
-            data.orders.forEach(co => {
-              const idx = orders.findIndex(o => o.orderId === co.orderId);
-              if (idx !== -1) {
-                if (orders[idx].statusCode !== co.statusCode || orders[idx].courierName !== co.courierName) {
-                  orders[idx] = { ...orders[idx], ...co };
-                  hasChanges = true;
-                }
-              } else {
-                orders.push(co);
-                hasChanges = true;
-              }
-            });
-            if (hasChanges) {
-              orders.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
-              try { localStorage.setItem('luster_orders', JSON.stringify(orders)); } catch(e) {}
-              const drawer = document.getElementById('drawer-orders');
-              if (drawer && drawer.classList.contains('active')) {
-                this._renderOrdersCenterDOM(containerEl, orders);
-              }
-            }
-          }
-        })
-        .catch(() => { clearTimeout(timeoutId); });
-    }
   }
 
   _renderOrdersCenterDOM(containerEl, orders = []) {
