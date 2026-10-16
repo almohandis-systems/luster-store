@@ -9761,7 +9761,16 @@ class LusterStore {
       if (qty <= 0) {
         this.removeFromCart(index);
       } else {
-        this.cart[index].quantity = qty;
+        const item = this.cart[index];
+        const product = (this.getState()?.products || []).find(p => p.id === item.id);
+        if (product && product.stock !== undefined && product.stock !== null && product.stock !== '' && Number.isFinite(Number(product.stock))) {
+          const otherQty = this.cart.reduce((sum, row, rowIndex) => sum + (rowIndex !== index && row && row.id === item.id ? (Number(row.quantity) || 0) : 0), 0);
+          if (otherQty + Number(qty) > Number(product.stock)) {
+            if (window.showToast) window.showToast(`الكمية المتاحة من هذا المنتج ${Math.max(0, Number(product.stock) - otherQty)} فقط.`, 'error');
+            return false;
+          }
+        }
+        this.cart[index].quantity = Math.max(1, Number(qty) || 1);
         this.saveLocal('luster_cart', this.cart);
         this.emit('CART_UPDATED', this.cart);
       }
@@ -10756,6 +10765,18 @@ class CommerceEngine {
       if (!this.store.cart || this.store.cart.length === 0) {
         window.showToast('سلة المشتريات فارغة! أضف منتجات أولاً', 'error');
         return;
+      }
+
+      // Last client-side stock preflight. A trusted backend transaction is still required to prevent cross-device race conditions.
+      const currentProducts = this.store.getState()?.products || [];
+      const cartQtyByProduct = new Map();
+      this.store.cart.forEach(item => cartQtyByProduct.set(item.id, (cartQtyByProduct.get(item.id) || 0) + (Number(item.quantity) || 0)));
+      for (const [productId, requestedQty] of cartQtyByProduct.entries()) {
+        const product = currentProducts.find(p => p.id === productId);
+        if (product && product.stock !== undefined && product.stock !== null && product.stock !== '' && Number.isFinite(Number(product.stock)) && requestedQty > Number(product.stock)) {
+          window.showToast(`الكمية المتاحة من ${product.titleAr || 'المنتج'} هي ${Math.max(0, Number(product.stock))} فقط. عدّل السلة قبل تأكيد الطلب.`, 'error');
+          return;
+        }
       }
 
       const nameInput = containerEl.querySelector('#chk-name');
