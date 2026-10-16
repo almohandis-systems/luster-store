@@ -54,6 +54,8 @@ if (!fs.existsSync('firebase.json') || !fs.existsSync('firestore.rules')) {
   knownRisks.push('Firebase Hosting/Firestore rules files are absent at repository root; deployment and data rules require separate configuration.');
 }
 if (knownRisks.length) {
-  console.warn('REVIEW WARNINGS (not a production-readiness certification):');
-  knownRisks.forEach(r => console.warn('- ' + r));
+  console.error('BLOCKED: LUSTER is not eligible for production release until the following security/configuration risks are resolved:');
+  knownRisks.forEach(r => console.error('- ' + r));
+  console.error('This gate intentionally fails closed. Do not bypass it or deploy the storefront as commercially ready.');
+  process.exit(2);
 }
