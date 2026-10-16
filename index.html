@@ -9561,6 +9561,7 @@ class LusterStore {
     this.points = this.loadLocal('luster_points', { balance: 350, tier: 'bronze', totalEarned: 350 });
     this.userRefCode = this.loadLocal('luster_my_ref_code', 'REF-' + Math.floor(1000 + Math.random() * 9000));
     this.activeCoupon = null;
+    this.activePointsRedemption = null;
     this.isStudioMode = false;
     this.previewState = null;
 
@@ -9890,13 +9891,51 @@ class LusterStore {
     this.emit('COUPON_REMOVED');
   }
 
+  getPointsRedemption() {
+    if (!this.activePointsRedemption) return { pointsUsed: 0, discount: 0 };
+    const balance = Math.max(0, Number(this.points?.balance) || 0);
+    const pointValue = Math.max(0.01, Number(this.state?.loyalty?.pointValueEGP) || 0.1);
+    const maxDiscount = Math.max(0, this.getCartSubtotal() * 0.2);
+    const pointsUsed = Math.min(balance, Number(this.activePointsRedemption.pointsUsed) || 0, Math.floor(maxDiscount / pointValue));
+    return { pointsUsed, discount: Math.min(maxDiscount, pointsUsed * pointValue) };
+  }
+
+  applyPointsToCart() {
+    const balance = Math.max(0, Number(this.points?.balance) || 0);
+    const pointValue = Math.max(0.01, Number(this.state?.loyalty?.pointValueEGP) || 0.1);
+    const subtotal = this.getCartSubtotal();
+    const maxDiscount = Math.max(0, subtotal * 0.2);
+    const pointsUsed = Math.min(balance, Math.floor(maxDiscount / pointValue));
+    const discount = Math.min(maxDiscount, pointsUsed * pointValue);
+    if (!this.cart?.length || pointsUsed <= 0 || discount <= 0) {
+      return { success: false, message: 'أضف منتجات للسلة وتأكد من وجود رصيد نقاط كافٍ لاستخدام الخصم.' };
+    }
+    this.activePointsRedemption = { pointsUsed, discount };
+    this.emit('POINTS_REDEMPTION_UPDATED', this.getPointsRedemption());
+    return { success: true, pointsUsed, discount, message: `تم تجهيز خصم ${discount.toFixed(2)} ج.م باستخدام ${pointsUsed} نقطة في السلة.` };
+  }
+
+  consumePointsRedemption(note = 'خصم نقاط عند إتمام الطلب') {
+    const redemption = this.getPointsRedemption();
+    if (redemption.pointsUsed > 0) {
+      this.points.balance = Math.max(0, (Number(this.points.balance) || 0) - redemption.pointsUsed);
+      this.points.spent = (Number(this.points.spent) || 0) + redemption.pointsUsed;
+      this.saveLocal('luster_points', this.points);
+      this.emit('POINTS_UPDATED', this.points);
+    }
+    this.activePointsRedemption = null;
+    this.emit('POINTS_REDEMPTION_UPDATED', { pointsUsed: 0, discount: 0, note });
+    return redemption;
+  }
+
   getCartTotal() {
     const subtotal = this.getCartSubtotal();
     // Shipping coupons waive delivery fees; they must never discount merchandise.
-    const discount = this.activeCoupon && this.activeCoupon.type !== 'shipping'
+    const couponDiscount = this.activeCoupon && this.activeCoupon.type !== 'shipping'
       ? (Number(this.activeCoupon.calculatedDiscount) || 0)
       : 0;
-    return Math.max(0, subtotal - discount);
+    const pointsDiscount = this.getPointsRedemption().discount;
+    return Math.max(0, subtotal - couponDiscount - pointsDiscount);
   }
 
   // Wallet Operations
@@ -10063,6 +10102,8 @@ class CommerceEngine {
     const subtotal = this.store.getCartSubtotal();
     const activeCoupon = this.store.activeCoupon;
     const discount = activeCoupon && activeCoupon.type !== 'shipping' ? (Number(activeCoupon.calculatedDiscount) || 0) : 0;
+    const pointsRedemption = this.store.getPointsRedemption();
+    const pointsDiscount = pointsRedemption.discount;
     const total = this.store.getCartTotal();
 
     const partialConfig = state.paymentSettings?.partialPayment || { enabled: false, depositPercentage: 20, minimumOrderAmount: 100 };
@@ -10134,6 +10175,12 @@ class CommerceEngine {
           <div style="display:flex; justify-content:space-between; font-size:14px; color:#50C878; margin-bottom:8px;">
             <span>قيمة الخصم:</span>
             <span style="font-weight:800;">-${discount} ${currency}</span>
+          </div>
+        ` : ''}
+        ${pointsDiscount > 0 ? `
+          <div style="display:flex; justify-content:space-between; font-size:13px; color:#16A34A; margin-bottom:8px;">
+            <span>خصم نقاط الولاء (${pointsRedemption.pointsUsed} نقطة):</span>
+            <span style="font-weight:800;">-${pointsDiscount.toFixed(2)} ${currency}</span>
           </div>
         ` : ''}
         <div style="display:flex; justify-content:space-between; font-size:18px; font-weight:900; color:#FFF; border-top:1px solid var(--border-subtle); padding-top:10px; margin-bottom:12px;">
@@ -10458,6 +10505,9 @@ class CommerceEngine {
     const useBtn = containerEl.querySelector('#btn-points-use-cart');
     if (useBtn) {
       useBtn.onclick = () => {
+        const result = this.store.applyPointsToCart();
+        if (result.success) window.showToast(result.message, 'success');
+        else window.showToast(result.message, 'error');
         window.openCartDrawer();
       };
     }
@@ -10918,7 +10968,9 @@ class CommerceEngine {
             totalAmount: total,
             depositAmount: isPartial ? depositAmount : total,
             remainingAmount: isPartial ? remainingAmount : 0,
-            discountApplied: this.store.activeCoupon ? this.store.activeCoupon.calculatedDiscount : 0,
+            discountApplied: (this.store.activeCoupon && this.store.activeCoupon.type !== 'shipping' ? (Number(this.store.activeCoupon.calculatedDiscount) || 0) : 0) + this.store.getPointsRedemption().discount,
+            pointsRedeemed: this.store.getPointsRedemption().pointsUsed,
+            pointsDiscount: this.store.getPointsRedemption().discount,
             couponCode: this.store.activeCoupon ? this.store.activeCoupon.code : null,
             paymentMethod: selectedPaymentMethod,
             isPartialPayment: isPartial,
@@ -10961,9 +11013,10 @@ class CommerceEngine {
             console.warn('Stock display update failed after confirmed order:', stockError);
           }
 
-          // Award loyalty points
+          // Award points for the confirmed order, then consume the prepared redemption.
           const earnedPts = Math.round(total / 10);
           this.store.addPoints(earnedPts, `نقاط مكتسبة عن طلب رقم ${data.order.orderId}`);
+          this.store.consumePointsRedemption(`استخدام نقاط في الطلب ${data.order.orderId}`);
 
           // Clear cart
           this.store.clearCart();
