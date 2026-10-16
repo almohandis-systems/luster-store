@@ -27,6 +27,9 @@ const required = [
   ['cart stock guard', 'stockTracked && availableStock <= 0'],
   ['checkout stock revalidation', 'const latestProducts = this.store.getState()?.products || [];'],
   ['stock update after order confirmation', 'Decrement visible stock only after the order API confirms creation.'],
+  ['points redemption logic', 'applyPointsToCart() {'],
+  ['points redemption consumed after confirmed order', 'consumePointsRedemption('],
+  ['shipping coupon only affects delivery', 'Shipping coupons waive delivery fees; they must never discount merchandise.'],
   ['no fake offline order success', 'processing local standalone fallback order']
 ];
 const missing = required.filter(([label, marker]) => {
