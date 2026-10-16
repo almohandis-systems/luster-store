@@ -53,3 +53,9 @@
 - Validation after this edit: all 8 inline JavaScript blocks parse with zero syntax errors; referral endpoint, validation, and truthful label markers are present; owner/developer code-path markers remain present.
 - Still not complete: trusted server-side referral attribution, abuse prevention, and reward issuance tied to a verified qualifying event.
 - Commit: `2eef58a615ea47dfc409473120d93987c22afc84`.
+
+
+## Follow-up validation after commerce fixes
+- Wired both the Wallet and Points screens' points-use buttons to the same redemption method; the action now prepares a real cart discount instead of only opening the cart.
+- Pending point redemption is cleared when the cart is emptied, and the app again parses all 8 inline JavaScript blocks without syntax errors.
+- The review workflow intentionally remains blocked for production because the underlying order privacy/authentication/Firebase configuration issues remain unresolved.
