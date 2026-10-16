@@ -14594,12 +14594,8 @@ class DeveloperSuperAdmin {
             logEl.scrollTop = logEl.scrollHeight;
           });
         } else {
-          logEl.innerHTML += '✓ [TEST 1/5] Store state integrity verified: OK\n';
-          logEl.innerHTML += '✓ [TEST 2/5] Add to cart functional validation: OK\n';
-          logEl.innerHTML += '✓ [TEST 3/5] PWA Service Worker caching strategy: OK\n';
-          logEl.innerHTML += '✓ [TEST 4/5] Continuous audio alarm system: OK\n';
-          logEl.innerHTML += '✓ [TEST 5/5] Security and permissions isolation: OK\n';
-          logEl.innerHTML += '\n=== جميع الاختبارات اجتازت الفحص بنجاح 100% ===\n';
+          logEl.innerHTML += '✕ [BLOCKED] لم يتم العثور على مشغل الاختبارات الفعلي؛ لم تُنفذ أي اختبارات.\n';
+          logEl.innerHTML += 'لا يجوز عرض نتائج نجاح افتراضية عند غياب دالة الاختبار.\n';
         }
       };
     }
@@ -25843,6 +25839,13 @@ if (typeof window !== "undefined") {
 // منتجات LUSTER - Comprehensive Automated Test Suite
 // Verifies core functionalities including Dynamic Phone Manager & Zero Mock Data
 async function runLusterAutomatedTests(log = console.log) {
+  // This suite creates/deletes test records and edits store sections. Never run it
+  // against a normal customer/production session by default.
+  if (typeof window === 'undefined' || window.__LUSTER_TEST_MODE__ !== true) {
+    log('⛔ تم إيقاف الاختبارات التي تغيّر البيانات: شغّلها فقط داخل بيئة اختبار معزولة بعد ضبط window.__LUSTER_TEST_MODE__ = true.');
+    log('لم يتم إنشاء طلبات أو تعديل إعدادات أو حذف بيانات.');
+    return { passed: 0, failed: 0, skipped: true, reason: 'isolated-test-mode-required' };
+  }
   let passed = 0;
   let failed = 0;
 
