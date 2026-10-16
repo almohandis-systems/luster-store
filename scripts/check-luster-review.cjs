@@ -6,13 +6,13 @@ if (!fs.existsSync(path)) {
   process.exit(1);
 }
 const html = fs.readFileSync(path, 'utf8');
-const scripts = [...html.matchAll(/<script\\b([^>]*)>([\\s\\S]*?)<\\/script\\s*>/gi)];
+const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi)];
 let parsed = 0;
 const errors = [];
 for (let i = 0; i < scripts.length; i++) {
   const attrs = scripts[i][1] || '';
   const code = scripts[i][2] || '';
-  if (/type\\s*=\\s*["']application\\/(?:ld\\+json|json)["']/i.test(attrs)) continue;
+  if (/type\s*=\s*["']application\/(?:ld\+json|json)["']/i.test(attrs)) continue;
   try {
     new Function(code);
     parsed++;
