@@ -124,3 +124,12 @@ The owner approved the full repair and feature scope, with a mandatory review-be
 - No changes have been merged or deployed. Do not publish until the owner reviews the full diff/report and explicitly approves a later release.
 - The requested commercial features remain tracked as implementation work, not completed claims. Prioritize order integrity/privacy, stock and checkout correctness, then promotions/shipping/payments/invoices, referrals, media/AI import, themes/sounds, and complete cross-device/mobile tests.
 - For every feature, record one of: `implemented and tested`, `implemented but not runtime-tested`, `blocked by missing backend/service/configuration`, or `not implemented`. Do not mark a feature complete from static search alone.
+
+
+## Additional test-harness safety fix (2026-10-16)
+
+- Found that the developer-facing test panel printed five unconditional success messages if the real test function was unavailable. Replaced those fabricated green results with an explicit blocked message.
+- The actual automated test function creates/deletes a phone record, edits/restores the hero section, creates a test order, and submits referral/spin requests. Added an explicit `window.__LUSTER_TEST_MODE__ === true` guard so those data-mutating checks do not run in an ordinary browser session by default. The guard returns a skipped result and states that no data was changed.
+- Validation after this change: fetched the committed 1,504,938-character `index.html`; all eight inline JavaScript blocks parsed with zero syntax errors using the JavaScript parser.
+- GitHub Actions run `38827369037` still fails the release gate for the expected client-side owner-PIN fallback/storage blockers. This is not a JavaScript syntax failure and must not be bypassed. The required server-side authorization migration has not been implemented or runtime-tested.
+- This is a concrete safety improvement, not completion of the full requested feature list. The branch remains unmerged and no deployment has occurred.
