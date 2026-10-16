@@ -9892,7 +9892,10 @@ class LusterStore {
 
   getCartTotal() {
     const subtotal = this.getCartSubtotal();
-    const discount = this.activeCoupon ? this.activeCoupon.calculatedDiscount : 0;
+    // Shipping coupons waive delivery fees; they must never discount merchandise.
+    const discount = this.activeCoupon && this.activeCoupon.type !== 'shipping'
+      ? (Number(this.activeCoupon.calculatedDiscount) || 0)
+      : 0;
     return Math.max(0, subtotal - discount);
   }
 
@@ -10059,7 +10062,7 @@ class CommerceEngine {
 
     const subtotal = this.store.getCartSubtotal();
     const activeCoupon = this.store.activeCoupon;
-    const discount = activeCoupon ? activeCoupon.calculatedDiscount : 0;
+    const discount = activeCoupon && activeCoupon.type !== 'shipping' ? (Number(activeCoupon.calculatedDiscount) || 0) : 0;
     const total = this.store.getCartTotal();
 
     const partialConfig = state.paymentSettings?.partialPayment || { enabled: false, depositPercentage: 20, minimumOrderAmount: 100 };
