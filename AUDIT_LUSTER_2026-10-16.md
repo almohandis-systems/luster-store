@@ -133,3 +133,10 @@ The owner approved the full repair and feature scope, with a mandatory review-be
 - Validation after this change: fetched the committed 1,504,938-character `index.html`; all eight inline JavaScript blocks parsed with zero syntax errors using the JavaScript parser.
 - GitHub Actions run `38827369037` still fails the release gate for the expected client-side owner-PIN fallback/storage blockers. This is not a JavaScript syntax failure and must not be bypassed. The required server-side authorization migration has not been implemented or runtime-tested.
 - This is a concrete safety improvement, not completion of the full requested feature list. The branch remains unmerged and no deployment has occurred.
+
+
+## CI guardrails added after test-harness review
+
+- Extended `scripts/check-inline-js.cjs` to fail if the data-mutating test suite loses its explicit isolated-test-mode guard, or if the developer panel regains its fabricated all-pass fallback.
+- The latest HTML source was re-parsed after the test-harness changes: all 8 inline JavaScript blocks parsed successfully with zero syntax errors.
+- Latest GitHub Actions run `38827472538` still fails at the release gate. This is expected while client-side PIN fallback/storage remains; the job does not certify commercial readiness.
