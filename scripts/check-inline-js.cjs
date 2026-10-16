@@ -24,6 +24,12 @@ for (let i = 0; i < scripts.length; i++) {
 }
 
 const blockers = [];
+if (!html.includes('window.__LUSTER_TEST_MODE__ !== true')) {
+  blockers.push('Data-mutating automated tests are missing the explicit isolated-test-mode guard.');
+}
+if (html.includes('[TEST 1/5] Store state integrity verified: OK')) {
+  blockers.push('Developer test panel contains fabricated all-pass output when the real test runner is unavailable.');
+}
 if (/allow\s+read\s*,\s*create:\s*if\s+true\s*;/i.test(html) &&
     /allow\s+update\s*,\s*delete:\s*if\s+true\s*;/i.test(html)) {
   blockers.push('Permissive Firestore rules template grants public order reads/writes.');
