@@ -1,0 +1,23 @@
+name: LUSTER Static Safety Checks
+
+on:
+  pull_request:
+  push:
+    branches:
+      - work/full-luster-audit
+
+permissions:
+  contents: read
+
+jobs:
+  static-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Parse inline JavaScript and check release blockers
+        run: node scripts/check-inline-js.cjs

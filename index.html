@@ -3254,6 +3254,11 @@ body.lang-en .studio-inspector-panel {
       </div>
       <p class="section-subtitle products-section-subtitle" data-text-key="products.sectionSubtitle" style="font-size:13px; color:var(--text-muted); margin-top:4px;">قطع نادرة مصممة بعناية لتعكس الرقي والتميز مع إمكانية الدفع الجزئي (عربون) والتوصيل السريع.</p>
     </div>
+    <div class="products-search-wrap" style="margin:14px 0 18px; position:relative;">
+      <label for="luster-products-search" style="display:block; margin-bottom:6px; font-size:12px; font-weight:800; color:var(--text-muted);">ابحث عن منتج</label>
+      <input id="luster-products-search" type="search" autocomplete="off" placeholder="اكتب اسم المنتج أو وصفه..." aria-label="البحث عن المنتجات" style="display:block; width:100%; min-height:46px; box-sizing:border-box; padding:12px 44px 12px 14px; border:1px solid var(--border-subtle); border-radius:14px; background:var(--bg-card); color:var(--text-primary); font:inherit; outline-offset:3px;">
+      <span aria-hidden="true" style="position:absolute; right:14px; bottom:10px; font-size:19px;">🔎</span>
+    </div>
     <div id="products-grid" class="products-grid">
     <!-- Product 1 -->
     <div class="product-card interactive-element" data-product-id="prod_1" data-studio-editable data-studio-type="product">
@@ -8689,7 +8694,7 @@ class LusterCloudBridge {
       };
     };
 
-    // 1. ORDERS ENDPOINTS
+    // 1. Orders routes handled by the client bridge unless a trusted backend is configured
     if (cleanUrl === '/api/orders') {
       if (method === 'POST') {
         const body = typeof options.body === 'string' ? JSON.parse(options.body) : (options.body || {});
@@ -9295,7 +9300,7 @@ DATA:${JSON.stringify({ type: 'NEW_ORDER', order: newOrder })}`;
       return buildRes({ success: true, history: hist });
     }
 
-    // 10. REFERRALS & REAL SHARE VERIFICATION ENGINE
+    // 10. REFERRAL VISIT COUNTS (client bridge; does not verify actual message sending or unique real people)
     if (cleanUrl === '/api/referrals/status') {
       const qCode = url.includes('code=') ? decodeURIComponent(url.split('code=')[1].split('&')[0]) : 'default';
       let counts = {};
@@ -9456,7 +9461,7 @@ if (typeof window !== 'undefined') {
 }
 
 // منتجات LUSTER - Client State & Persistence Engine
-// Real-time synchronization via Server-Sent Events (SSE) + LocalStorage Offline Support
+// Client-side state persistence and best-effort cloud bridge; cross-device reliability must be verified
 
 class LusterStore {
   grantWheelBonusSpins(count = 1) {
@@ -9688,6 +9693,11 @@ class LusterStore {
     }
     if (!product.id) return;
 
+    if (product.stock !== undefined && product.stock !== null && product.stock !== '' && Number.isFinite(Number(product.stock)) && Number(product.stock) <= 0) {
+      if (window.showToast) window.showToast('نفد المخزون من هذا المنتج حاليًا.', 'error');
+      return false;
+    }
+
     if (!Array.isArray(this.cart)) {
       this.cart = this.loadLocal('luster_cart', []);
     }
@@ -9702,6 +9712,13 @@ class LusterStore {
     const existingIndex = this.cart.findIndex(item =>
       item && item.id === product.id && JSON.stringify(item.selectedOptions || {}) === JSON.stringify(opts)
     );
+    if (product.stock !== undefined && product.stock !== null && product.stock !== '' && Number.isFinite(Number(product.stock))) {
+      const alreadyInCart = this.cart.filter(item => item && item.id === product.id).reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+      if (alreadyInCart + qty > Number(product.stock)) {
+        if (window.showToast) window.showToast(`الكمية المتاحة من هذا المنتج ${Math.max(0, Number(product.stock) - alreadyInCart)} فقط.`, 'error');
+        return false;
+      }
+    }
 
     if (existingIndex > -1) {
       this.cart[existingIndex].quantity = (Number(this.cart[existingIndex].quantity) || 0) + qty;
@@ -9744,7 +9761,16 @@ class LusterStore {
       if (qty <= 0) {
         this.removeFromCart(index);
       } else {
-        this.cart[index].quantity = qty;
+        const item = this.cart[index];
+        const product = (this.getState()?.products || []).find(p => p.id === item.id);
+        if (product && product.stock !== undefined && product.stock !== null && product.stock !== '' && Number.isFinite(Number(product.stock))) {
+          const otherQty = this.cart.reduce((sum, row, rowIndex) => sum + (rowIndex !== index && row && row.id === item.id ? (Number(row.quantity) || 0) : 0), 0);
+          if (otherQty + Number(qty) > Number(product.stock)) {
+            if (window.showToast) window.showToast(`الكمية المتاحة من هذا المنتج ${Math.max(0, Number(product.stock) - otherQty)} فقط.`, 'error');
+            return false;
+          }
+        }
+        this.cart[index].quantity = Math.max(1, Number(qty) || 1);
         this.saveLocal('luster_cart', this.cart);
         this.emit('CART_UPDATED', this.cart);
       }
@@ -9778,7 +9804,8 @@ class LusterStore {
     } else if (coupon.type === 'fixed') {
       discount = Math.min(coupon.value, subtotal);
     } else if (coupon.type === 'shipping') {
-      discount = coupon.value;
+      // Free-shipping coupons waive delivery fees; they must not discount product prices.
+      discount = 0;
     }
 
     this.activeCoupon = { ...coupon, calculatedDiscount: discount };
@@ -10257,6 +10284,35 @@ class CommerceEngine {
     const usePointsBtn = containerEl.querySelector('#btn-use-points-in-cart');
     if (usePointsBtn) {
       usePointsBtn.onclick = () => {
+        const subtotal = this.store.getCartSubtotal();
+        const points = this.store.points || { balance: 0, spent: 0 };
+        const pointValue = Math.max(0, Number(state.loyalty?.pointValueEGP) || 0.1);
+        if (!this.store.cart || this.store.cart.length === 0 || subtotal <= 0) {
+          window.showToast('أضف منتجات إلى السلة أولًا، ثم طبّق خصم النقاط.', 'info');
+          window.openCartDrawer();
+          return;
+        }
+        if (!(Number(points.balance) > 0) || !(pointValue > 0)) {
+          window.showToast('لا يوجد رصيد نقاط متاح للاستخدام حاليًا.', 'error');
+          return;
+        }
+        const discount = Math.min(subtotal, Math.floor(Number(points.balance) * pointValue));
+        const pointsToRedeem = Math.min(Number(points.balance), Math.ceil(discount / pointValue));
+        if (!(discount > 0) || !(pointsToRedeem > 0)) {
+          window.showToast('رصيد النقاط لا يكفي لتطبيق خصم على هذه السلة.', 'error');
+          return;
+        }
+        this.store.activeCoupon = {
+          id: 'points_redemption',
+          code: 'POINTS',
+          type: 'points',
+          nameAr: 'خصم النقاط',
+          calculatedDiscount: discount,
+          pointsToRedeem,
+          pointValueEGP: pointValue
+        };
+        this.store.emit('COUPON_APPLIED', this.store.activeCoupon);
+        window.showToast(`تم تطبيق خصم ${discount} ج.م باستخدام ${pointsToRedeem} نقطة. تُخصم النقاط بعد تسجيل الطلب.`, 'success');
         window.openCartDrawer();
       };
     }
@@ -10711,6 +10767,18 @@ class CommerceEngine {
         return;
       }
 
+      // Last client-side stock preflight. A trusted backend transaction is still required to prevent cross-device race conditions.
+      const currentProducts = this.store.getState()?.products || [];
+      const cartQtyByProduct = new Map();
+      this.store.cart.forEach(item => cartQtyByProduct.set(item.id, (cartQtyByProduct.get(item.id) || 0) + (Number(item.quantity) || 0)));
+      for (const [productId, requestedQty] of cartQtyByProduct.entries()) {
+        const product = currentProducts.find(p => p.id === productId);
+        if (product && product.stock !== undefined && product.stock !== null && product.stock !== '' && Number.isFinite(Number(product.stock)) && requestedQty > Number(product.stock)) {
+          window.showToast(`الكمية المتاحة من ${product.titleAr || 'المنتج'} هي ${Math.max(0, Number(product.stock))} فقط. عدّل السلة قبل تأكيد الطلب.`, 'error');
+          return;
+        }
+      }
+
       const nameInput = containerEl.querySelector('#chk-name');
       const phoneInput = containerEl.querySelector('#chk-phone');
       const addrInput = containerEl.querySelector('#chk-address');
@@ -10827,6 +10895,15 @@ class CommerceEngine {
             localStorage.setItem('luster_customer_phone', cleanPhone);
           } catch(e) {}
 
+          if (this.store.activeCoupon?.type === 'points') {
+            const redeem = Math.min(Number(this.store.points?.balance) || 0, Number(this.store.activeCoupon.pointsToRedeem) || 0);
+            if (redeem > 0) {
+              this.store.points.balance = Math.max(0, (Number(this.store.points.balance) || 0) - redeem);
+              this.store.points.spent = (Number(this.store.points.spent) || 0) + redeem;
+              this.store.saveLocal('luster_points', this.store.points);
+              this.store.emit('POINTS_UPDATED', this.store.points);
+            }
+          }
           // Award loyalty points
           const earnedPts = Math.round(total / 10);
           this.store.addPoints(earnedPts, `نقاط مكتسبة عن طلب رقم ${data.order.orderId}`);
@@ -10901,6 +10978,15 @@ class CommerceEngine {
           localStorage.setItem('luster_customer_phone', cleanPhone);
         } catch(e) {}
 
+        if (this.store.activeCoupon?.type === 'points') {
+          const redeem = Math.min(Number(this.store.points?.balance) || 0, Number(this.store.activeCoupon.pointsToRedeem) || 0);
+          if (redeem > 0) {
+            this.store.points.balance = Math.max(0, (Number(this.store.points.balance) || 0) - redeem);
+            this.store.points.spent = (Number(this.store.points.spent) || 0) + redeem;
+            this.store.saveLocal('luster_points', this.store.points);
+            this.store.emit('POINTS_UPDATED', this.store.points);
+          }
+        }
         this.store.clearCart();
         this.store.removeCoupon();
 
@@ -12252,11 +12338,11 @@ class LusterStudio {
   async promptChangeOwnerPin() {
     const current = this.getOwnerPin();
     const oldEntered = await window.lusterPrompt('أدخل الرمز السري الحالي للمالك:');
-    if (oldEntered === current || oldEntered === '2222' || oldEntered === '0846') {
+    if (oldEntered === current) {
       const newPin = await window.lusterPrompt('أدخل الرمز السري الجديد المكون من 4 أرقام:');
       if (newPin && newPin.trim().length >= 4) {
         this.setOwnerPin(newPin.trim());
-        window.showToast(`تم تغيير رمز المالك بنجاح إلى: ${newPin.trim()} ✦`, 'success');
+        window.showToast('تم تغيير رمز المالك بنجاح.', 'success');
       } else if (newPin !== null) {
         window.showToast('الرمز الجديد يجب ألا يقل عن 4 أرقام', 'error');
       }
@@ -12278,7 +12364,7 @@ class LusterStudio {
       <div class="owner-auth-card">
         <div style="font-size:38px; margin-bottom:8px;">🔐</div>
         <h3 style="color:var(--accent-gold); font-size:18px; font-weight:900; margin-bottom:6px;">LUSTER Studio — استوديو المالك</h3>
-        <p style="font-size:12px; color:var(--text-muted); margin-bottom:16px;">هذا القسم مخصص للمالك المصرح به فقط ومحمي بآلية تحقق أمنية. أدخل الرمز السري لمالك المنظومة (الافتراضي: 2222):</p>
+        <p style="font-size:12px; color:var(--text-muted); margin-bottom:16px;">هذا القسم مخصص للمالك المصرح به فقط ومحمي بآلية تحقق أمنية. أدخل الرمز السري الذي سبق أن عيّنه مالك المنظومة:</p>
         <input type="password" id="owner-auth-pin" maxlength="6" class="owner-pin-input" placeholder="••••" autofocus autocomplete="off">
         <div style="display:flex; gap:10px;">
           <button id="btn-owner-auth-submit" class="btn-luxury-gold" style="flex:1; padding:12px; font-size:14px;">تأكيد الدخول ✦</button>
@@ -12296,14 +12382,14 @@ class LusterStudio {
     const attemptLogin = () => {
       const pin = pinInput.value.trim();
       const validPin = this.getOwnerPin();
-      if (pin === validPin || pin === '2222' || pin === '0846') {
+      if (validPin && pin === validPin) {
         sessionStorage.setItem('luster_owner_authenticated', 'true');
         modal.style.display = 'none';
         window.showToast('تم التحقق بنجاح! مرحبًا بك في استوديو المالك ✦', 'success');
         this.toggleStudioMode(true);
       } else {
         msgEl.style.display = 'block';
-        msgEl.textContent = 'الرمز السري غير صحيح! تأكد من إدخال رمز المالك الصحيح.';
+        msgEl.textContent = validPin ? 'الرمز السري غير صحيح! تأكد من إدخال رمز المالك الصحيح.' : 'لم يتم إعداد رمز مالك في هذه الجلسة. تم منع الدخول الافتراضي؛ يلزم إعداد مصادقة مالك آمنة قبل تفعيل لوحة التحكم.';
         pinInput.value = '';
         pinInput.focus();
       }
@@ -14577,12 +14663,8 @@ class DeveloperSuperAdmin {
             logEl.scrollTop = logEl.scrollHeight;
           });
         } else {
-          logEl.innerHTML += '✓ [TEST 1/5] Store state integrity verified: OK\n';
-          logEl.innerHTML += '✓ [TEST 2/5] Add to cart functional validation: OK\n';
-          logEl.innerHTML += '✓ [TEST 3/5] PWA Service Worker caching strategy: OK\n';
-          logEl.innerHTML += '✓ [TEST 4/5] Continuous audio alarm system: OK\n';
-          logEl.innerHTML += '✓ [TEST 5/5] Security and permissions isolation: OK\n';
-          logEl.innerHTML += '\n=== جميع الاختبارات اجتازت الفحص بنجاح 100% ===\n';
+          logEl.innerHTML += '✕ [BLOCKED] لم يتم العثور على مشغل الاختبارات الفعلي؛ لم تُنفذ أي اختبارات.\n';
+          logEl.innerHTML += 'لا يجوز عرض نتائج نجاح افتراضية عند غياب دالة الاختبار.\n';
         }
       };
     }
@@ -15177,41 +15259,66 @@ class LusterOwnerDashboard {
 
   async checkPendingNewOrders() {
     try {
-      if (window.lusterCloudBridge) {
-        await window.lusterCloudBridge.fetchCloudOrders();
+      // Refresh cloud-backed cache first, but never treat a successful empty API
+      // response as proof that no local/Firestore orders exist.
+      if (window.lusterCloudBridge && typeof window.lusterCloudBridge.fetchCloudOrders === 'function') {
+        try { await window.lusterCloudBridge.fetchCloudOrders(); } catch (cloudErr) {}
       }
-      const res = await window.lusterApi('/api/orders');
-      if (res && res.ok) {
-        const data = await res.json();
-        const orders = data.orders || [];
-        const newOrders = orders.filter(o => o.statusCode === 'new');
-        const undeliveredOrders = orders.filter(o => o.statusCode !== 'delivered' && o.statusCode !== 'cancelled');
-        this.pendingNewOrdersCount = newOrders.length;
-        this.undeliveredOrdersCount = undeliveredOrders.length;
-        this.updateAlarmState();
-        const modal = document.getElementById('luster-owner-dashboard-modal');
-        if (modal && modal.classList.contains('active') && this.activeTab === 'orders') {
-          const body = modal.querySelector('.owner-suite-body');
-          if (body) {
-            const currentCardCount = body.querySelectorAll('.owner-order-card').length;
-            if (currentCardCount !== orders.length || newOrders.length > 0) {
-              this.renderOrdersTab(body);
-            }
+
+      let apiOrders = [];
+      try {
+        const res = await window.lusterApi('/api/orders');
+        if (res && res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data.orders)) apiOrders = data.orders;
+        }
+      } catch (apiErr) {}
+
+      let localOrders = [];
+      try {
+        const parsed = JSON.parse(localStorage.getItem('luster_orders') || '[]');
+        if (Array.isArray(parsed)) localOrders = parsed;
+      } catch (storageErr) {}
+
+      // Merge by stable order ID. Local/Firestore cache fills gaps when the
+      // API is empty/unavailable; API records take precedence when present.
+      const merged = new Map();
+      localOrders.forEach(o => { if (o && o.orderId) merged.set(o.orderId, o); });
+      apiOrders.forEach(o => {
+        if (!o || !o.orderId) return;
+        merged.set(o.orderId, { ...(merged.get(o.orderId) || {}), ...o });
+      });
+      const orders = Array.from(merged.values());
+      const newOrders = orders.filter(o => o.statusCode === 'new');
+      const undeliveredOrders = orders.filter(o => o.statusCode !== 'delivered' && o.statusCode !== 'cancelled');
+
+      this.pendingNewOrdersCount = newOrders.length;
+      this.undeliveredOrdersCount = undeliveredOrders.length;
+      this.updateAlarmState();
+
+      const modal = document.getElementById('luster-owner-dashboard-modal');
+      if (modal && modal.classList.contains('active') && this.activeTab === 'orders') {
+        const body = modal.querySelector('.owner-suite-body');
+        if (body) {
+          const currentCardCount = body.querySelectorAll('.owner-order-card').length;
+          if (currentCardCount !== orders.length || newOrders.length > 0) {
+            this.renderOrdersTab(body);
           }
         }
       }
     } catch (e) {
+      // Fail safely to local orders; keep the owner alert responsive offline.
       try {
         const local = JSON.parse(localStorage.getItem('luster_orders') || '[]');
-        const newOrders = local.filter(o => o.statusCode === 'new');
-        const undeliveredOrders = local.filter(o => o.statusCode !== 'delivered' && o.statusCode !== 'cancelled');
+        const orders = Array.isArray(local) ? local : [];
+        const newOrders = orders.filter(o => o && o.statusCode === 'new');
+        const undeliveredOrders = orders.filter(o => o && o.statusCode !== 'delivered' && o.statusCode !== 'cancelled');
         this.pendingNewOrdersCount = newOrders.length;
         this.undeliveredOrdersCount = undeliveredOrders.length;
         this.updateAlarmState();
       } catch (err) {}
     }
   }
-
   updateAlarmState() {
     // Non-stop siren that never stops until owner acknowledges orders
     if (this.pendingNewOrdersCount > 0) {
@@ -15622,42 +15729,71 @@ class LusterOwnerDashboard {
   }
 
   async acknowledgeAllNewOrders() {
+    // Stop locally first so the owner control responds immediately.
     this.alarmEngine.stopAlarm();
+
+    let apiOrders = [];
     try {
       const res = await window.lusterApi('/api/orders');
-      if (res.ok) {
+      if (res && res.ok) {
         const data = await res.json();
-        const newOrders = (data.orders || []).filter(o => o.statusCode === 'new');
-        for (const o of newOrders) {
-          await window.lusterApi('/api/orders/status', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              orderId: o.orderId,
-              statusCode: 'received',
-              actor: 'المالك (Owner)',
-              reason: 'اعتماد واستلام فوري عبر شريط التنبيه'
-            })
-          });
-        }
+        if (Array.isArray(data.orders)) apiOrders = data.orders;
       }
-    } catch (e) {
+    } catch (e) {}
+
+    let localOrders = [];
+    try {
+      const parsed = JSON.parse(localStorage.getItem('luster_orders') || '[]');
+      if (Array.isArray(parsed)) localOrders = parsed;
+    } catch (e) {}
+
+    // Always acknowledge cached orders too. Previously this happened only
+    // when the API threw; HTTP 200 with [] left local orders "new" and
+    // the polling loop immediately restarted the siren.
+    const byId = new Map();
+    localOrders.forEach(o => { if (o && o.orderId) byId.set(o.orderId, o); });
+    apiOrders.forEach(o => {
+      if (o && o.orderId) byId.set(o.orderId, { ...(byId.get(o.orderId) || {}), ...o });
+    });
+    const newOrders = Array.from(byId.values()).filter(o => o.statusCode === 'new');
+
+    localOrders = localOrders.map(o => {
+      if (o && o.statusCode === 'new') {
+        return { ...o, statusCode: 'received', status: 'تم الاستلام', receivedAt: new Date().toISOString() };
+      }
+      return o;
+    });
+    try { localStorage.setItem('luster_orders', JSON.stringify(localOrders)); } catch (e) {}
+
+    // Attempt server updates for every known new order; local stop remains
+    // functional if the API is offline, without falsely claiming cloud sync.
+    let cloudUpdatesSucceeded = true;
+    for (const o of newOrders) {
       try {
-        const local = JSON.parse(localStorage.getItem('luster_orders') || '[]');
-        local.forEach(o => {
-          if (o.statusCode === 'new') {
-            o.statusCode = 'received';
-            o.status = 'تم الاستلام';
-            o.receivedAt = new Date().toISOString();
-          }
+        const res = await window.lusterApi('/api/orders/status', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderId: o.orderId,
+            statusCode: 'received',
+            actor: 'المالك (Owner)',
+            reason: 'اعتماد واستلام عبر لوحة المالك'
+          })
         });
-        localStorage.setItem('luster_orders', JSON.stringify(local));
-      } catch (err) {}
+        if (!res || !res.ok) cloudUpdatesSucceeded = false;
+      } catch (e) {
+        cloudUpdatesSucceeded = false;
+      }
     }
 
     this.pendingNewOrdersCount = 0;
     this.updateAlarmState();
-    window.showToast('تم استلام جميع الطلبات الجديدة وتوقف رنين الإنذار بنجاح ✓', 'success');
+    window.showToast(
+      cloudUpdatesSucceeded
+        ? 'تم استلام الطلبات الجديدة وإيقاف الإنذار ✓'
+        : 'تم إيقاف الإنذار وتحديث الطلبات محليًا؛ تعذرت مزامنة بعض الحالات مع الخادم',
+      cloudUpdatesSucceeded ? 'success' : 'warning'
+    );
     const modal = document.getElementById('luster-owner-dashboard-modal');
     if (modal) this.renderTabContent(modal.querySelector('.owner-suite-body'));
   }
@@ -19416,14 +19552,10 @@ class LusterOwnerDashboard {
     const rulesBtn = container.querySelector('#btn-copy-firestore-rules');
     if (rulesBtn) {
       rulesBtn.onclick = () => {
-        const rules = `rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    match /luster_orders/{orderId} {\n      allow read, create: if true;\n      allow update, delete: if true;\n    }\n    match /luster_store/{document=**} {\n      allow read: if true;\n      allow write: if true;\n    }\n  }\n}`;
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(rules).then(() => {
-            window.showToast('✓ تم نسخ قواعد الحماية للحافظة! يمكنك لصقها في Firebase Console', 'success');
-          });
-        } else {
-          window.lusterPrompt('قواعد أمان Firestore جاهزة للنسخ:', rules);
-        }
+        // Do not present unrestricted public access as a security template.
+        // The correct rules depend on a verified customer/owner authorization model.
+        window.showToast('تنبيه أمني: لن يتم نسخ قواعد تسمح للجميع بقراءة وتعديل بيانات المتجر والطلبات. يلزم إعداد قواعد مقيّدة واختبارها قبل تفعيل Firebase.', 'error');
+        window.lusterPrompt('تنبيه أمني مهم: لا تلصق قواعد تسمح بالقراءة والكتابة للجميع. يجب إعداد قواعد Firestore وفق صلاحيات العملاء والمالك واختبارها قبل النشر.');
       };
     }
 
@@ -19434,12 +19566,16 @@ class LusterOwnerDashboard {
         bcastBtn.disabled = true;
         bcastBtn.innerText = 'جارٍ البث السحابي لكافة العملاء... ⏳';
         try {
-          if (bridge) {
-            await bridge.publishCatalogToCloud(this.store.getState());
+          if (!bridge || typeof bridge.publishCatalogToCloud !== 'function') {
+            throw new Error('Cloud bridge unavailable');
           }
-          window.showToast('✓ تم نشر وتثبيت كافة بيانات المتجر سحابياً بنجاح! سيراها جميع العملاء في أقل من ثانية 🚀', 'success');
+          const publishResult = await bridge.publishCatalogToCloud(this.store.getState());
+          if (publishResult === false || (publishResult && publishResult.ok === false)) {
+            throw new Error('Cloud publish was not confirmed');
+          }
+          window.showToast('تم إرسال طلب المزامنة السحابية. لم يتم التحقق بعد من ظهوره على أجهزة العملاء؛ اختبره من جلسة أخرى.', 'info');
         } catch(err) {
-          window.showToast('تم حفظ التعديلات محلياً وسيتم نشرها تلقائياً', 'info');
+          window.showToast('تعذر تأكيد المزامنة السحابية. التعديلات المحلية لا تعني أنها وصلت إلى جميع العملاء.', 'error');
         }
         bcastBtn.disabled = false;
         bcastBtn.innerText = '🚀 بث ونشر كافة التعديلات لجميع العملاء الآن (Broadcast Now)';
@@ -25230,22 +25366,38 @@ class LusterApp {
     const currency = state.brand?.currency || 'ج.م';
 
     const visibleProducts = products.filter(p => !p.hidden);
-    const filtered = this.activeCategory === 'all'
+    const searchInput = document.getElementById('luster-products-search');
+    if (searchInput && !searchInput.dataset.lusterBound) {
+      searchInput.dataset.lusterBound = '1';
+      searchInput.addEventListener('input', () => {
+        this.textProductSearch = searchInput.value || '';
+        this.renderProducts();
+      });
+    }
+    const query = String(this.textProductSearch || (searchInput && searchInput.value) || '').trim().toLocaleLowerCase('ar');
+    const categoryFiltered = this.activeCategory === 'all'
       ? visibleProducts
       : visibleProducts.filter(p => p.category === this.activeCategory);
+    const filtered = categoryFiltered.filter(p => {
+      if (!query) return true;
+      const searchable = [p.titleAr, p.title, p.titleEn, p.descriptionAr, p.description, p.category]
+        .filter(Boolean).join(' ').toLocaleLowerCase('ar');
+      return searchable.includes(query);
+    });
 
     if (filtered.length === 0) {
       grid.innerHTML = `
         <div style="grid-column: 1 / -1; text-align:center; padding:48px 20px; background:var(--bg-secondary); border:1px dashed var(--border-gold); border-radius:var(--radius-lg);">
-          <div style="font-size:42px; margin-bottom:10px;">✨</div>
-          <h3 style="font-size:17px; font-weight:900; color:var(--accent-gold); margin-bottom:6px;">جارٍ تحديث المنتجات في هذا القسم</h3>
-          <p style="font-size:13px; color:var(--text-muted);">ترقبوا أحدث منتجات وعروض LUSTER قريباً.</p>
+          <div style="font-size:42px; margin-bottom:10px;">${query ? '🔎' : '✨'}</div>
+          <h3 style="font-size:17px; font-weight:900; color:var(--accent-gold); margin-bottom:6px;">${query ? 'لا توجد منتجات مطابقة لبحثك' : 'جارٍ تحديث المنتجات في هذا القسم'}</h3>
+          <p style="font-size:13px; color:var(--text-muted);">${query ? 'جرّب كلمة أخرى أو امسح البحث لعرض المنتجات.' : 'ترقبوا أحدث منتجات وعروض LUSTER قريباً.'}</p>
         </div>
       `;
       return;
     }
 
     const partialCfg = state.paymentSettings?.partialPayment || { enabled: false, depositPercentage: 20, depositType: 'percent', fixedDepositAmount: 50 };
+    const escapeOptionText = value => String(value ?? '').replace(/[&<>\"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', "'": '&#39;' }[ch]));
 
     grid.innerHTML = filtered.map(prod => {
       const artSvg = Artwork[prod.image] || Artwork.detergent_powder;
@@ -25313,11 +25465,23 @@ class LusterApp {
             ${prod.descriptionAr ? `
               <p class="product-desc-text">${prod.descriptionAr}</p>
             ` : ''}
-            ${allOptionChoices.length > 0 ? `
-              <div class="product-options-pills">
-                ${allOptionChoices.map((ch, cIdx) => `
-                  <span class="product-option-pill ${cIdx === 0 ? 'active' : ''}" onclick="this.parentElement.querySelectorAll('.product-option-pill').forEach(p=>p.classList.remove('active')); this.classList.add('active'); event.stopPropagation();">${ch}</span>
-                `).join('')}
+            ${Array.isArray(prod.options) && prod.options.some(opt => opt && Array.isArray(opt.choices) && opt.choices.length) ? `
+              <div class="product-options-pills" style="display:grid;gap:8px;">
+                ${prod.options.filter(opt => opt && Array.isArray(opt.choices) && opt.choices.length).map((opt, optIdx) => {
+                  const optionName = escapeOptionText(opt.nameAr || opt.name || opt.titleAr || ('اختيار ' + (optIdx + 1)));
+                  return `
+                    <label class="product-options-group" data-option-name="${optionName}" style="display:grid;gap:4px;font-size:12px;color:var(--text-muted);">
+                      <span>${optionName}</span>
+                      <select class="product-option-select" data-option-name="${optionName}" style="width:100%;padding:8px;border-radius:9px;border:1px solid var(--border-subtle);background:var(--bg-card);color:var(--text-primary);font:inherit;">
+                        <option value="">اختر ${optionName}</option>
+                        ${opt.choices.filter(Boolean).map(choice => {
+                          const safeChoice = escapeOptionText(typeof choice === 'object' ? (choice.labelAr || choice.nameAr || choice.label || choice.value || '') : choice);
+                          return safeChoice ? `<option value="${safeChoice}">${safeChoice}</option>` : '';
+                        }).join('')}
+                      </select>
+                    </label>
+                  `;
+                }).join('')}
               </div>
             ` : ''}
             <div class="product-meta">
@@ -25334,12 +25498,14 @@ class LusterApp {
               </div>
             ` : ''}
             <div class="product-actions">
-              <button class="btn-add-cart" data-id="${prod.id}">
-                <span>🛒</span> أضف للسلة
+              ${(prod.stock !== undefined && Number.isFinite(Number(prod.stock)) && Number(prod.stock) <= 0) ? '<span class="product-stock-status" role="status" style="font-size:11px;font-weight:900;color:#DC2626;">نفد من المخزون مؤقتًا</span>' : ''}
+              <button class="btn-add-cart" data-id="${prod.id}" ${(prod.stock !== undefined && Number.isFinite(Number(prod.stock)) && Number(prod.stock) <= 0) ? 'disabled aria-disabled="true" title="نفد المخزون"' : ''}>
+                <span>🛒</span> ${(prod.stock !== undefined && Number.isFinite(Number(prod.stock)) && Number(prod.stock) <= 0) ? 'نفد المخزون' : 'أضف للسلة'}
               </button>
               <button class="btn-quick-view" data-id="${prod.id}" title="عرض التفاصيل الكاملة">
                 👁️
               </button>
+              <button class="btn-share-product" data-id="${prod.id}" type="button" title="مشاركة رابط المنتج" aria-label="مشاركة المنتج" style="min-width:40px;border-radius:10px;border:1px solid var(--border-subtle);background:var(--bg-secondary);color:var(--text-primary);cursor:pointer;">🔗</button>
             </div>
           </div>
         </div>
@@ -25381,12 +25547,61 @@ class LusterApp {
         e.stopPropagation();
         const pid = btn.dataset.id;
         const prod = products.find(p => p.id === pid);
-        if (prod) {
-          this.store.addToCart(prod, 1);
-          this.renderDockBar();
-          window.showToast(`تمت إضافة ${prod.titleAr} إلى السلة! 🛒`, 'success');
-          window.openCartDrawer();
+        if (!prod) return;
+        if (prod.stock !== undefined && Number.isFinite(Number(prod.stock)) && Number(prod.stock) <= 0) {
+          window.showToast('نفد المخزون من هذا المنتج حاليًا.', 'error');
+          this.renderProducts();
+          return;
         }
+        const selectedOptions = {};
+        const card = btn.closest('.product-card');
+        const optionSelects = card ? Array.from(card.querySelectorAll('.product-option-select')) : [];
+        for (const select of optionSelects) {
+          if (!select.value) {
+            window.showToast('اختر ' + (select.dataset.optionName || 'خيارات المنتج') + ' أولًا.', 'error');
+            select.focus();
+            return;
+          }
+          selectedOptions[select.dataset.optionName || 'اختيار'] = select.value;
+        }
+        const added = this.store.addToCart(prod, 1, selectedOptions);
+        if (added === false) return;
+        this.renderDockBar();
+        window.showToast(`تمت إضافة ${prod.titleAr} إلى السلة! 🛒`, 'success');
+        window.openCartDrawer();
+      };
+    });
+
+    grid.querySelectorAll('.btn-share-product').forEach(btn => {
+      btn.onclick = async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const prod = products.find(p => p.id === btn.dataset.id);
+        if (!prod) return;
+        const shareUrl = window.location.origin + window.location.pathname + window.location.search + '#product=' + encodeURIComponent(prod.id);
+        const shareText = `${prod.titleAr || prod.title || 'منتج من LUSTER'} - ${prod.price || ''} ${currency}\\n${shareUrl}`;
+        try {
+          if (navigator.share) {
+            await navigator.share({ title: prod.titleAr || 'LUSTER', text: shareText, url: shareUrl });
+          } else if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(shareUrl);
+            window.showToast('تم نسخ رابط المنتج. يمكنك مشاركته الآن.', 'success');
+          } else {
+            window.open('https://wa.me/?text=' + encodeURIComponent(shareText), '_blank', 'noopener,noreferrer');
+          }
+        } catch (err) {
+          if (err && err.name !== 'AbortError') window.showToast('تعذرت المشاركة الآن. حاول مرة أخرى.', 'error');
+        }
+      };
+    });
+
+    grid.querySelectorAll('.product-option-pill').forEach(pill => {
+      pill.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const group = pill.closest('.product-options-group');
+        group?.querySelectorAll('.product-option-pill').forEach(item => item.classList.remove('active'));
+        pill.classList.add('active');
       };
     });
 
@@ -25693,6 +25908,13 @@ if (typeof window !== "undefined") {
 // منتجات LUSTER - Comprehensive Automated Test Suite
 // Verifies core functionalities including Dynamic Phone Manager & Zero Mock Data
 async function runLusterAutomatedTests(log = console.log) {
+  // This suite creates/deletes test records and edits store sections. Never run it
+  // against a normal customer/production session by default.
+  if (typeof window === 'undefined' || window.__LUSTER_TEST_MODE__ !== true) {
+    log('⛔ تم إيقاف الاختبارات التي تغيّر البيانات: شغّلها فقط داخل بيئة اختبار معزولة بعد ضبط window.__LUSTER_TEST_MODE__ = true.');
+    log('لم يتم إنشاء طلبات أو تعديل إعدادات أو حذف بيانات.');
+    return { passed: 0, failed: 0, skipped: true, reason: 'isolated-test-mode-required' };
+  }
   let passed = 0;
   let failed = 0;
 
@@ -25712,7 +25934,7 @@ async function runLusterAutomatedTests(log = console.log) {
   log('==================================================\n');
 
   try {
-    // Test 1: Fetch State from Backend API
+    // Test 1: Fetch state through the LUSTER API bridge (may use local fallback)
     log('--- المرحلة 1: اختبار الخادم وقاعدة البيانات والحالة المباشرة ---');
     const stateRes = await window.lusterApi('/api/state');
     assert(stateRes.ok, '1. اتصال API واجهة الحالة الأساسية /api/state يعمل بنجاح');
@@ -25798,7 +26020,7 @@ async function runLusterAutomatedTests(log = console.log) {
     const historyData = await historyRes.json();
     assert(historyData.history && historyData.history.length > 0, '15. تسجيل التعديلات في سجل التدقيق والمراجعة الكامل (Audit Log)');
 
-    // Test 5: Referral Challenge & Anti-Abuse System
+    // Test 5: Referral visit-count behavior in the local bridge (not proof of real shares or identity)
     log('\n--- المرحلة 5: اختبار مسابقة الإحالة وتتبع الزيارات ومنع التلاعب ---');
     const testRefCode = 'TEST_REF_' + Math.floor(Math.random() * 10000);
     const refClick1 = await window.lusterApi('/api/referrals/click', {
@@ -25818,7 +26040,7 @@ async function runLusterAutomatedTests(log = console.log) {
     const refDataDup = await refClickDup.json();
     assert(refDataDup.success && refDataDup.isDuplicate && refDataDup.count === 1, '17. نظام الحماية ضد التلاعب يرفض احتساب نفس الزائر مرتين (Anti-Abuse)');
 
-    // Test 6: Server-Verified Spin & Win Logic
+    // Test 6: Local bridge spin logic (not server-verified without a trusted backend)
     log('\n--- المرحلة 6: اختبار عجلة الحظ الملكية والجوائز العشوائية ---');
     const spinRes = await window.lusterApi('/api/spin', { method: 'POST' });
     const spinData = await spinRes.json();
@@ -25863,7 +26085,7 @@ async function runLusterAutomatedTests(log = console.log) {
     // Summary
     log('\n==================================================');
     log(`ملخص نتائج الفحص: ${passed} نجح | ${failed} فشل`);
-    log('حالة المنظومة: جاهزة للعمل والاستخدام الملكي الفاخر 100%');
+    log('تنبيه: هذه نتائج فحوصات داخلية محلية فقط، وليست شهادة جاهزية تجارية أو إثباتًا لمزامنة الخادم الحقيقي. يلزم اجتياز اختبارات المتصفح وقاعدة البيانات والأمان قبل الإطلاق.');
     log('==================================================');
 
     return { passed, failed, total: passed + failed };
