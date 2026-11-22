@@ -7014,32 +7014,28 @@ const DEFAULT_LUSTER_STATE = {
     "currency": "ج.م",
     "currencyEn": "EGP",
     "language": "ar",
-    "phone": "01013376681",
-    "whatsapp": "96565704145",
+    "phone": "01099251781",
+    "whatsapp": "201099251781",
     "appShareUrl": ""
   },
   "phoneManager": {
     "numbers": [
       {
         "id": "phone_default_1",
-        "number": "01013376681",
+        "number": "01099251781",
         "label": "الرقم الرسمي المعتمد",
         "visible": true,
         "purposes": [
           "call",
           "whatsapp",
-          "vodafoneCash",
-          "instapay",
           "support",
-          "developer"
+          "support"
         ],
         "isPrimaryFor": [
           "call",
           "whatsapp",
-          "vodafoneCash",
-          "instapay",
           "support",
-          "developer"
+          "support"
         ]
       }
     ]
@@ -12009,7 +12005,18 @@ class LusterStore {
   }
 
   getState() {
-    return this.previewState || this.state || DEFAULT_LUSTER_STATE;
+    const state = this.previewState || this.state || DEFAULT_LUSTER_STATE;
+    // Owner's explicit contact correction, also applies to stale cached states.
+    state.brand = state.brand || {};
+    state.brand.phone = '01099251781';
+    state.brand.whatsapp = '201099251781';
+    const numbers = state.phoneManager?.numbers || [];
+    const other = numbers.map(n => ({...n,
+      purposes:(n.purposes || []).filter(p => !['call','whatsapp','support'].includes(p)),
+      isPrimaryFor:(n.isPrimaryFor || []).filter(p => !['call','whatsapp','support'].includes(p))
+    })).filter(n => n.purposes.length && !String(n.number).includes('96565704145'));
+    state.phoneManager = {numbers:[{id:'owner_contact_20261122',number:'01099251781',label:'رقم لاستر الرسمي',visible:true,purposes:['call','whatsapp','support'],isPrimaryFor:['call','whatsapp','support']}, ...other]};
+    return state;
   }
 
   // Granular Save System per Category
@@ -13541,7 +13548,7 @@ class CommerceEngine {
 
     const state = this.store.getState();
     const phoneMgr = state.phoneManager || { numbers: [] };
-    const waNumber = '96565704145';
+    const waNumber = '201099251781';
 
     let searchHeaderHtml = `
       <div style="background:var(--bg-secondary); border:1.5px solid var(--accent-gold); border-radius:var(--radius-sm); padding:14px; margin-bottom:16px;">
@@ -26297,7 +26304,7 @@ ${!p.hidePrice ? `<br>• <strong>حجز بعربون ${depositPct}%:</strong> �
       replyText = `تنورينا في أي وقت يا فندم! دي أرقام التواصل الرسمية المعتمدة لشركة <strong>${brandName}</strong> 📞:
 ${phonesHtml}
 <br>• <strong>فودافون كاش وإنستاباي:</strong> <strong style="color:#50C878; direction:ltr; display:inline-block;">${vfPhone}</strong>
-<br>• <strong>واتساب خدمة العملاء المباشر:</strong> <a href="https://wa.me/96565704145" target="_blank" style="color:#22C55E; font-weight:900; text-decoration:underline;">اضغطي هنا لفتح محادثة واتساب فورية 💬</a>`;
+<br>• <strong>واتساب خدمة العملاء المباشر:</strong> <a href="https://wa.me/201099251781" target="_blank" style="color:#22C55E; font-weight:900; text-decoration:underline;">اضغطي هنا لفتح محادثة واتساب فورية 💬</a>`;
       followUpChips = [
         { label: '💳 طرق الدفع والعربون', q: 'ما هي طرق الدفع ورقم فودافون كاش والتوصيل؟' },
         { label: '📍 عنوان ومقر الشركة', q: 'عنوانكم ومكانكم فين؟' }
@@ -27237,7 +27244,7 @@ class LusterApp {
           } else {
             listEl.innerHTML = numbers.map(p => {
               const clean = (p.number || '').replace(/\D/g, '');
-              const waUrl = 'https://wa.me/96565704145';
+              const waUrl = 'https://wa.me/201099251781';
               const isWa = (p.purposes || []).includes('whatsapp');
               return `
                 <div style="background:var(--bg-card); border:1px solid var(--border-gold); border-radius:var(--radius-sm); padding:12px 16px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
@@ -30014,11 +30021,11 @@ if (typeof window !== 'undefined') {
 </script>
 
 <script>
-(()=>{const wa='https://wa.me/96565704145',call='tel:+201013376681';
+(()=>{const wa='https://wa.me/201099251781',call='tel:+201013376681';
 function contacts(){
 for(const id of ['hdr-phone1-btn','card-phone1-wa','card-phone2-wa','track-whatsapp-btn','lock-screen-whatsapp-btn']){const e=document.getElementById(id);if(e){const q=(e.getAttribute('href')||'').split('?')[1];const dest=wa+(q?'?'+q:'');if(e.getAttribute('href')!==dest)e.setAttribute('href',dest);}}
 for(const id of ['hdr-phone2-btn','card-phone1-call','card-phone2-call']){const e=document.getElementById(id);if(e&&e.getAttribute('href')!==call)e.setAttribute('href',call);}
-for(const id of ['hdr-phone1-val','card-phone1-display']){const e=document.getElementById(id);if(e&&e.textContent!=='+96565704145')e.textContent='+96565704145';}
+for(const id of ['hdr-phone1-val','card-phone1-display']){const e=document.getElementById(id);if(e&&e.textContent!=='+201099251781')e.textContent='+201099251781';}
 for(const id of ['hdr-phone2-val','card-phone2-display']){const e=document.getElementById(id);if(e&&e.textContent!=='01013376681')e.textContent='01013376681';}
 }
 contacts();new MutationObserver(contacts).observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['href']});
