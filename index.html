@@ -10644,11 +10644,11 @@ class LusterCloudBridge {
     const isOwnerPublisher = (typeof localStorage !== 'undefined') &&
       (localStorage.getItem('luster_owner_device_verified') === 'true' ||
        (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('luster_owner_authenticated') === 'true'));
-    if (!isOwnerPublisher) return { skipped: 'not-owner-device' };
+    if (!isOwnerPublisher) return {success:false,offline:true,skipped:'not-owner-device'};
     if(this.auth?.currentUser?.uid!=='UImYxitPLoVnAuJla2wfC2Apids2'){
       this.saveLocalState(fullState || this.state);
       window.lusterCatalogPublishNotice('التعديل محفوظ على هذا الجهاز فقط. سجّل الدخول بحساب المالك قبل النشر؛ لم تؤكد السحابة حفظه.');
-      return {skipped:'owner-cloud-login-required'};
+      return {success:false,offline:true,skipped:'owner-cloud-login-required'};
     }
     const rawTarget = fullState || (this.store && this.store.state) || this.state || this.loadLocalState();
     rawTarget.version = Date.now();
@@ -10681,7 +10681,7 @@ class LusterCloudBridge {
 
     // 2. Guaranteed Multi-Cloud Sync (Offloads media to chunks -> Saves slim <20KB catalog to KVDB + Firestore + ntfy)
     window.lusterCatalogPublishNotice('التعديل محفوظ على الجهاز. جارٍ التحقق من الكتالوج الحالي قبل النشر لحماية المنتجات الموجودة.');
-    (async () => {
+    const publication=await (async () => {
       try {
         const snapshots=await Promise.all([this.firestoreRestGetDoc('luster_store','catalog'),this.firestoreRestGetDoc('luster_store','catalog_sync')]);
         if(snapshots.some(snapshot=>!snapshot))throw new Error('current-catalog-could-not-be-verified');
@@ -10697,15 +10697,17 @@ class LusterCloudBridge {
         ]);
         if(!results.every(result=>result===true))throw new Error('cloud-catalog-write-not-confirmed');
         window.lusterCatalogPublishNotice('',true);
+        return {success:true,version:this.state.version};
 
       } catch (e) {
         window.lusterCatalogPublishNotice('التعديل محفوظ على هذا الجهاز فقط. تعذر تأكيد نشر الكتالوج في السحابة، لا تعتبره وصل للأجهزة الأخرى بعد.');
         console.warn('publishCatalogToCloud warning:', e);
+        return {success:false,offline:true,error:'cloud-publication-not-confirmed'};
       }
     })();
 
     setTimeout(() => this.resolveAllDOMCloudMedia(), 60);
-    return this.state;
+    return publication;
   }
 
   async fetchCloudState() {
@@ -11038,8 +11040,8 @@ class LusterCloudBridge {
     if (cleanUrl === '/api/publish' && method === 'POST') {
       const body = typeof options.body === 'string' ? JSON.parse(options.body) : (options.body || {});
       const targetState = body.state || (this.store && this.store.state) || this.state;
-      await this.publishCatalogToCloud(targetState);
-      return buildRes({ success: true, version: this.state.version });
+      const result=await this.publishCatalogToCloud(targetState);
+      return buildRes(result || {success:false,offline:true,error:'cloud-publication-not-confirmed'},result?.success?200:503);
     }
 
     // 7. PRODUCTS SAVE & DELETE (0ms Instant Local + Background Cloud Sync)
@@ -18155,11 +18157,11 @@ class LusterOwnerDashboard {
       if (savePublishBtn) {
         savePublishBtn.onclick = async () => {
           try {
-            await this.store.publish('حفظ ونشر تعديلات لوحة تحكم المالك');
-            window.showToast('تم حفظ ونشر كافة إعدادات وتعديلات المتجر بنجاح ✦', 'success');
+            const result=await this.store.publish('حفظ ونشر تعديلات لوحة تحكم المالك');
+            if(!result?.success)window.showToast('التعديل محفوظ محليًا فقط؛ لم يتأكد النشر في السحابة.', 'warning');
           } catch(e) {
             this.store.saveLocal('luster_cached_state', this.store.state);
-            window.showToast('تم حفظ التعديلات محلياً بنجاح ✦', 'success');
+            window.showToast('التعديل محفوظ محليًا فقط؛ لم يتأكد النشر في السحابة.', 'warning');
           }
         };
       }
