@@ -9898,6 +9898,42 @@ class LusterCloudBridge {
     this.initNetworkListeners();
     this.initRealtimeSubscriptions();
     this.startBackgroundSync();
+    setTimeout(() => this.flushPendingOrders(), 5000);
+    window.addEventListener('online', () => this.flushPendingOrders());
+  }
+
+  queueOrder(order) {
+    const key = 'luster_pending_orders_v1';
+    const pending = JSON.parse(localStorage.getItem(key) || '{}');
+    pending[order.orderId] = order;
+    localStorage.setItem(key, JSON.stringify(pending));
+  }
+
+  async flushPendingOrders() {
+    if (this._flushingOrders) return;
+    this._flushingOrders = true;
+    try {
+      const key = 'luster_pending_orders_v1';
+      const pending = JSON.parse(localStorage.getItem(key) || '{}');
+      const {baseUrl, keyParam} = this.getFirestoreRestBaseUrl();
+      for (const [id, order] of Object.entries(pending)) {
+        try {
+          const response = await fetch(`${baseUrl}/luster_orders${keyParam}&documentId=${encodeURIComponent(id)}`, {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({fields:{jsonPayload:{stringValue:JSON.stringify(order)},createdAt:{stringValue:order.createdAt || new Date().toISOString()}}}),
+            signal:AbortSignal.timeout(8000)
+          });
+          // Stable random order id makes a retry idempotent: never overwrite another order.
+          if (response.ok || response.status === 409) {
+            const latest = JSON.parse(localStorage.getItem(key) || '{}');
+            delete latest[id]; localStorage.setItem(key, JSON.stringify(latest));
+            const saved = this.orders.find(o => o.orderId === id);
+            if (saved) saved.deliveryConfirmed = true;
+            this.saveLocalOrders(this.orders);
+          }
+        } catch(e) {}
+      }
+    } finally { this._flushingOrders = false; }
   }
 
   getStoreId() {
@@ -10438,6 +10474,7 @@ class LusterCloudBridge {
     // Background polling every 3.5 seconds
     this.pollInterval = setInterval(() => {
       this.syncNow();
+      this.flushPendingOrders();
     }, 60000);
   }
 
@@ -10901,7 +10938,7 @@ class LusterCloudBridge {
     if (cleanUrl === '/api/orders') {
       if (method === 'POST') {
         const body = typeof options.body === 'string' ? JSON.parse(options.body) : (options.body || {});
-        const orderId = body.orderId || ('LUST-' + Math.floor(100000 + Math.random() * 900000));
+        const orderId = body.orderId || ('LUST-' + crypto.randomUUID());
         const otpCode = body.otpCode || Math.floor(100000 + Math.random() * 900000).toString();
         const total = Number(body.totalAmount) || 0;
         const isPartial = !!body.isPartialPayment;
@@ -10950,47 +10987,10 @@ class LusterCloudBridge {
         this.orders.unshift(newOrder);
         this.saveLocalOrders(this.orders);
 
-        // Instant Multi-Phone Cloud Order Sync (Firestore REST orders_sync + KVDB + ntfy + Firestore SDK)
-        const syncOrdersPayload = {
-          version: Date.now(),
-          updatedAt: new Date().toISOString(),
-          orders: this.orders.slice(0, 80).map(o => ({ ...o, receiptImage: null }))
-        };
-        const itemsSummary = (newOrder.items || []).map(i => `${i.titleAr || i.title || 'صنف'} × ${i.quantity || i.qty || 1}`).join('، ');
-        const cust = newOrder.customer || {};
-        const isPartialText = newOrder.isPartialPayment ? ` (عربون: ${newOrder.depositAmount} ج.م - متبقي: ${newOrder.remainingAmount} ج.م)` : '';
-        const slimOrderForNtfy = { ...newOrder, receiptImage: null };
-        const formattedNtfyMsg = `👤 العميل: ${cust.name || 'عميل جديد'}\n📱 الهاتف: ${cust.phone || ''}\n📍 العنوان: ${cust.address || ''}\n📦 الأصناف: ${itemsSummary}\n💰 الإجمالي: ${newOrder.totalAmount} ج.م${isPartialText}\n💳 الدفع: ${newOrder.paymentMethod || 'كاش'}\n\nDATA:${JSON.stringify({ type: 'NEW_ORDER', order: slimOrderForNtfy })}`;
-
-        const cloudOrderPushPromise = Promise.allSettled([
-          this.firestoreRestSetDoc('luster_store', 'orders_sync', syncOrdersPayload),
-          this.firestoreRestSetDoc('luster_orders', newOrder.orderId, newOrder),
-          safeCloudFetch(`https://kvdb.io/4y9h8K5P7vG6jN3x2w/orders_${this.storeId}`, {
-            method: 'POST',
-            body: JSON.stringify(syncOrdersPayload.orders)
-          }),
-          safeCloudFetch(`https://ntfy.sh/${this.ordersTopic}`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'text/plain; charset=utf-8',
-              'Title': 'LUSTER New Order Alert',
-              'Priority': 'urgent',
-              'Tags': 'rotating_light,shopping_cart'
-            },
-            body: formattedNtfyMsg
-          }),
-          this.db ? Promise.race([
-            this.db.collection('luster_orders').doc(newOrder.orderId).set(slimOrderForNtfy),
-            new Promise(r => setTimeout(r, 1800))
-          ]) : Promise.resolve()
-        ]);
-
-        try {
-          await Promise.race([
-            cloudOrderPushPromise,
-            new Promise(resolve => setTimeout(resolve, 1800))
-          ]);
-        } catch (e) {}
+        newOrder.deliveryConfirmed = false;
+        this.queueOrder(newOrder);
+        await Promise.race([this.flushPendingOrders(), new Promise(r => setTimeout(r, 8500))]);
+        newOrder.deliveryConfirmed = !JSON.parse(localStorage.getItem('luster_pending_orders_v1') || '{}')[newOrder.orderId];
 
         return buildRes({ success: true, order: newOrder });
       }
@@ -13372,7 +13372,7 @@ class CommerceEngine {
         }
       } catch (err) {
         console.warn('Backend error, processing local standalone fallback order:', err);
-        const orderId = 'LUST-' + Math.floor(100000 + Math.random() * 900000);
+        const orderId = 'LUST-' + crypto.randomUUID();
         const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
         const otpExpiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
         const localOrder = {
@@ -13404,6 +13404,9 @@ class CommerceEngine {
             }
           ]
         };
+        localOrder.deliveryConfirmed = false;
+        window.lusterCloudBridge?.queueOrder(localOrder);
+        window.lusterCloudBridge?.flushPendingOrders();
 
         try {
           const localOrders = JSON.parse(localStorage.getItem('luster_orders') || '[]');
@@ -13777,7 +13780,7 @@ class CommerceEngine {
       if (waBtn && order) {
         waBtn.onclick = () => {
           const cleanWa = waNumber.replace(/\D/g, '');
-          const waFull = cleanWa.startsWith('20') ? cleanWa : (cleanWa.startsWith('0') ? `2${cleanWa}` : `20${cleanWa}`);
+          const waFull = cleanWa.startsWith('0') ? `2${cleanWa}` : cleanWa;
           const msg = encodeURIComponent(`مرحبًا LUSTER، أرغب في الاستفسار عن حالة طلبي الملكي رقم #${order.orderId}`);
           window.open(`https://api.whatsapp.com/send?phone=${waFull}&text=${msg}`, '_blank');
         };
@@ -17110,7 +17113,7 @@ class DeveloperSuperAdmin {
               العنوان: ${o.customer?.address}
             </div>
             <div style="font-size:13px; font-weight:800; color:var(--accent-gold); margin-top:6px;">
-              الإجمالي: ${o.totalAmount} ج.م ${o.isPartialPayment ? `(عربون: ${o.depositAmount} ج.م | متبقي: ${o.remainingAmount} ج.م)` : '(مدفوع بالكامل)'}
+              الإجمالي: ${o.totalAmount} ج.م ${o.isPartialPayment ? `(عربون: ${o.depositAmount} ج.م | متبقي: ${o.remainingAmount} ج.م)` : '(حسب طريقة الدفع المختارة)'}
             </div>
             <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">
               طريقة الدفع: ${o.paymentMethod} | ${new Date(o.createdAt).toLocaleString('ar-EG')}
@@ -27029,7 +27032,7 @@ window.showOrderSuccessModal = function(order) {
 
   const primaryPhone = (state.phoneManager?.numbers || []).find(n => n.visible && (n.purposes || []).includes('whatsapp'))?.number || state.brand?.whatsapp || '01013376681';
   const cleanPhone = primaryPhone.replace(/\D/g, '');
-  const waTarget = cleanPhone.startsWith('20') ? cleanPhone : (cleanPhone.startsWith('0') ? '2' + cleanPhone : '20' + cleanPhone);
+  const waTarget = cleanPhone.startsWith('0') ? '2' + cleanPhone : cleanPhone;
   const itemsText = (order.items || []).map(i => `${i.titleAr || i.title || 'صنف'} × ${i.quantity || i.qty || 1}`).join('\n• ');
   const waMsgText = encodeURIComponent(`مرحباً LUSTER، قمت بتأكيد طلب جديد رقم #${order.orderId} عبر المتجر:
 👤 العميل: ${order.customer?.name || ''}
@@ -27042,10 +27045,11 @@ window.showOrderSuccessModal = function(order) {
   const waLink = `https://api.whatsapp.com/send?phone=${waTarget}&text=${waMsgText}`;
 
   body.innerHTML = `
+    ${!order.deliveryConfirmed ? '<p role="alert" style="padding:16px;background:#713f12;color:white;line-height:1.8">تعذر تأكيد وصول الطلب. اضغط زر واتساب بالأسفل وأرسل الرسالة بنفسك لتوصيل الطلب مباشرة. سنعيد محاولة الحفظ عند فتح المتجر وعودة الاتصال. لا تغلق الصفحة قبل إرسال واتساب.</p>' : ''}
     <div style="text-align:center; padding:24px 12px;">
       <div style="font-size:64px; margin-bottom:12px; animation:lusterLetterBounce 1.5s infinite;">👑</div>
       <h3 style="font-size:22px; font-weight:900; color:var(--accent-gold-light); margin-bottom:6px;">
-        تم تسجيل طلبك الملكي بنجاح!
+        ${order.deliveryConfirmed ? 'وصل طلبك للمتجر' : 'طلبك محفوظ على هذا الجهاز، ولم يتأكد وصوله بعد'}
       </h3>
       <div style="font-size:16px; font-weight:900; color:#FFF; font-family:var(--font-luxury); margin-bottom:16px;">
         رقم الطلب: ${order.orderId}
@@ -27061,7 +27065,7 @@ window.showOrderSuccessModal = function(order) {
             <div>العربون المدفوع الآن: <strong>${order.depositAmount} ${state.brand.currency}</strong></div>
             <div>المتبقي عند الاستلام: <strong>${order.remainingAmount} ${state.brand.currency}</strong></div>
           ` : `
-            <div>إجمالي المبلغ: <strong>${order.totalAmount} ${state.brand.currency}</strong> (مدفوع بالكامل)</div>
+            <div>إجمالي المبلغ: <strong>${order.totalAmount} ${state.brand.currency}</strong> (حسب طريقة الدفع المختارة)</div>
           `}
         </div>
       </div>
