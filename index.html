@@ -10142,6 +10142,7 @@ class LusterCloudBridge {
             attachFirestoreRealtimeListeners();
             this.fetchCloudState();
             this.fetchCloudOrders();
+            window.lusterApp?.ownerDashboard?.updateOwnerCloudStatus();
           }
         });
       }
@@ -10628,6 +10629,7 @@ class LusterCloudBridge {
       const headers = {};
       if (this.auth?.currentUser) headers.Authorization = 'Bearer ' + await this.auth.currentUser.getIdToken();
       const res = await safeCloudFetch(url, {headers});
+      if(collectionName==='luster_store' && ['catalog','catalog_sync'].includes(docId))this._lastCatalogReadStatus=res?.status || 0;
       if (res && res.ok) {
         const doc = await res.json();
         if (doc && doc.fields && doc.fields.jsonPayload && doc.fields.jsonPayload.stringValue) {
@@ -10647,7 +10649,7 @@ class LusterCloudBridge {
     if (!isOwnerPublisher) return {success:false,offline:true,skipped:'not-owner-device'};
     if(this.auth?.currentUser?.uid!=='UImYxitPLoVnAuJla2wfC2Apids2'){
       this.saveLocalState(fullState || this.state);
-      window.lusterCatalogPublishNotice('التعديل محفوظ على هذا الجهاز فقط. سجّل الدخول بحساب المالك قبل النشر؛ لم تؤكد السحابة حفظه.');
+      window.lusterCatalogPublishNotice('التعديل محفوظ على هذا الجهاز فقط. سجّل الدخول بحساب المالك قبل النشر؛ لم تؤكد السحابة حفظه.',false,'owner-login');
       return {success:false,offline:true,skipped:'owner-cloud-login-required'};
     }
     const rawTarget = fullState || (this.store && this.store.state) || this.state || this.loadLocalState();
@@ -10700,7 +10702,7 @@ class LusterCloudBridge {
         return {success:true,version:this.state.version};
 
       } catch (e) {
-        window.lusterCatalogPublishNotice('التعديل محفوظ على هذا الجهاز فقط. تعذر تأكيد نشر الكتالوج في السحابة، لا تعتبره وصل للأجهزة الأخرى بعد.');
+        window.lusterCatalogPublishNotice(this._lastCatalogReadStatus===429?'حساب المالك متصل، لكن خدمة قراءة الكتالوج أعادت حدّ الاستخدام (429). التعديل محفوظ محليًا فقط، ولم يتأكد نشره للأجهزة الأخرى.':'التعديل محفوظ على هذا الجهاز فقط. تعذر تأكيد نشر الكتالوج في السحابة، لا تعتبره وصل للأجهزة الأخرى بعد.');
         console.warn('publishCatalogToCloud warning:', e);
         return {success:false,offline:true,error:'cloud-publication-not-confirmed'};
       }
@@ -14597,10 +14599,10 @@ class ExperienceEngine {
     };
   };
 
-  window.lusterCatalogPublishNotice=function(message,success=false){
+  window.lusterCatalogPublishNotice=function(message,success=false,kind='publication'){
     document.getElementById('luster-catalog-publish-notice')?.remove();
     if(success){window.showToast('أكدت السحابة حفظ الكتالوج. وصوله للأجهزة الأخرى يحتاج التحقق من المزامنة.', 'success');return;}
-    const box=document.createElement('div');box.id='luster-catalog-publish-notice';box.setAttribute('role','alert');box.style.cssText='position:fixed;left:12px;right:12px;bottom:78px;z-index:2147483646;background:#713f12;color:white;padding:14px;border:1px solid #fcd34d;border-radius:10px;font-size:13px;line-height:1.7';box.textContent=message;document.body.appendChild(box);
+    const box=document.createElement('div');box.id='luster-catalog-publish-notice';box.dataset.noticeKind=kind;box.setAttribute('role','alert');box.style.cssText='position:fixed;left:12px;right:12px;bottom:78px;z-index:2147483646;background:#713f12;color:white;padding:14px;border:1px solid #fcd34d;border-radius:10px;font-size:13px;line-height:1.7';box.textContent=message;document.body.appendChild(box);
   };
 
 
@@ -17985,6 +17987,11 @@ class LusterOwnerDashboard {
     const connected=auth?.currentUser?.uid==='UImYxitPLoVnAuJla2wfC2Apids2';
     if(status){status.textContent=connected?'متصل بحساب المالك. قراءة البيانات والنشر لهما حالة منفصلة.':(!auth?'خدمة تسجيل الدخول غير جاهزة بعد. أعد المحاولة بعد تحميل الصفحة.':'غير مسجّل بحساب المالك. اضغط الزر لتسجيل الدخول.');status.style.color=connected?'#86efac':'#fcd34d';}
     if(button)button.textContent=connected?'التحقق من اتصال المالك':'تسجيل دخول المالك';
+    const notice=document.getElementById('luster-catalog-publish-notice');
+    if(connected && notice && (notice.dataset.noticeKind==='owner-login' || notice.textContent.includes('سجّل الدخول بحساب المالك قبل النشر'))){
+      notice.dataset.noticeKind='publication';
+      notice.textContent=window.lusterCloudBridge?._lastCatalogReadStatus===429?'حساب المالك متصل. قراءة الكتالوج متوقفة بسبب حدّ الاستخدام (429)، ولم يتأكد نشر التعديلات.':'حساب المالك متصل الآن. التنبيه يخص عملية نشر سابقة لم تتأكد؛ تسجيل الدخول وحده لا يؤكد وصول التعديلات للأجهزة الأخرى.';
+    }
   }
 
   renderDashboardModal() {
