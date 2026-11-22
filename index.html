@@ -2061,6 +2061,18 @@ body, html {
 }
 
 .text-motion-none { animation: none !important; }
+/* Owner request (22 Nov 2026): only the LUSTER logo animates; all other text stays still */
+.developer-signature-box,
+.shine-text,
+.smart-attention,
+.text-motion-fade, .text-motion-slide, .text-motion-rise, .text-motion-zoom,
+.text-motion-typewriter, .text-motion-bounce, .text-motion-float,
+.text-motion-glowpulse, .text-motion-blurreveal,
+#luster-flash-banner-text,
+[data-luster-animated]:not(.luster-letter):not(.luster-brand-logo):not(.luster-brand-logo *) {
+  animation: none !important;
+}
+
 .text-motion-fade { animation: textFade 0.8s ease forwards; }
 .text-motion-slide { animation: textSlide 0.8s cubic-bezier(0.2, 0.9, 0.3, 1) forwards; }
 .text-motion-rise { animation: textRise 0.8s cubic-bezier(0.2, 0.9, 0.3, 1) forwards; }
@@ -3124,13 +3136,7 @@ body.studio-mode #luster-chat-fab,
     <div class="luster-header-inner luster-container">
       <!-- LUSTER Brand Animated Logo (Ultra-Luxury Royal Silk Wave: Calm, Slow, Smooth & Majestic for Customers) -->
       <a class="luster-brand-logo" href="#" title="LUSTER Visual Commerce" dir="ltr" style="direction:ltr !important; display:inline-flex !important; flex-direction:row !important; align-items:center !important; letter-spacing:5px !important; flex-shrink:0 !important; visibility:visible !important; opacity:1 !important; z-index:20;">
-        <span class="luster-letter" style="color:#FFD700; filter:drop-shadow(0 0 8px rgba(255,215,0,0.85)); display:inline-block !important; animation: lusterLetterBounce 1.5s ease-in-out infinite 0s;">L</span>
-        <span class="luster-letter" style="color:#38BDF8; filter:drop-shadow(0 0 8px rgba(56,189,248,0.85)); display:inline-block !important; animation: lusterLetterPulse 1.6s ease-in-out infinite 0.15s;">U</span>
-        <span class="luster-letter" style="color:#50C878; filter:drop-shadow(0 0 8px rgba(80,200,120,0.85)); display:inline-block !important; animation: lusterLetterFloat 1.7s ease-in-out infinite 0.30s;">S</span>
-        <span class="luster-letter" style="color:#F472B6; filter:drop-shadow(0 0 8px rgba(244,114,182,0.85)); display:inline-block !important; animation: lusterLetterShimmer 1.5s ease-in-out infinite 0.45s;">T</span>
-        <span class="luster-letter" style="color:#C084FC; filter:drop-shadow(0 0 8px rgba(192,132,252,0.85)); display:inline-block !important; animation: lusterLetterPulse 1.6s ease-in-out infinite 0.60s;">E</span>
-        <span class="luster-letter" style="color:#FDE047; filter:drop-shadow(0 0 8px rgba(253,224,71,0.85)); display:inline-block !important; animation: lusterLetterBounce 1.5s ease-in-out infinite 0.75s;">R</span>
-      </a>
+        <span class="luster-letter" style="color:#FDF0E6; filter:drop-shadow(0 0 8px #FFE8D6); display:inline-block !important; animation: lusterLetterShimmer 2.4s ease-in-out infinite 0.00s;">L</span><span class="luster-letter" style="color:#FF7F6B; filter:drop-shadow(0 0 8px #FFB4A2); display:inline-block !important; animation: lusterLetterShimmer 2.4s ease-in-out infinite 0.25s;">U</span><span class="luster-letter" style="color:#FBDCE5; filter:drop-shadow(0 0 8px #FFD9E8); display:inline-block !important; animation: lusterLetterShimmer 2.4s ease-in-out infinite 0.50s;">S</span><span class="luster-letter" style="color:#FF6F61; filter:drop-shadow(0 0 8px #FF9E8A); display:inline-block !important; animation: lusterLetterShimmer 2.4s ease-in-out infinite 0.75s;">T</span><span class="luster-letter" style="color:#FAF3E0; filter:drop-shadow(0 0 8px #FFF3C9); display:inline-block !important; animation: lusterLetterShimmer 2.4s ease-in-out infinite 1.00s;">E</span><span class="luster-letter" style="color:#FF8E7A; filter:drop-shadow(0 0 8px #FFC1B0); display:inline-block !important; animation: lusterLetterShimmer 2.4s ease-in-out infinite 1.25s;">R</span></a>
 
       <!-- Header Action Controls (Clean luxury customer view with small elegant PWA Install button) -->
       <div class="header-actions">
@@ -7038,65 +7044,66 @@ const DEFAULT_LUSTER_STATE = {
     ]
   },
   "logo": {
+    "enabled": true,
+    "text": "LUSTER",
+    "letterSpacing": "5px",
+    "fontSize": "32px",
     "letters": [
       {
         "char": "L",
-        "color": "#FFD700",
-        "glow": "#FFDF73",
-        "motion": "bounce",
-        "speed": "1.4s",
-        "delay": "0.0s",
+        "color": "#FDF0E6",
+        "glow": "#FFE8D6",
+        "motion": "shimmer",
+        "speed": "2.4s",
+        "delay": "0.00s",
         "entrance": "zoomIn"
       },
       {
         "char": "U",
-        "color": "#38BDF8",
-        "glow": "#7DD3FC",
-        "motion": "pulse",
-        "speed": "1.5s",
-        "delay": "0.15s",
-        "entrance": "fadeInDown"
+        "color": "#FF7F6B",
+        "glow": "#FFB4A2",
+        "motion": "shimmer",
+        "speed": "2.4s",
+        "delay": "0.25s",
+        "entrance": "zoomIn"
       },
       {
         "char": "S",
-        "color": "#50C878",
-        "glow": "#86EFAC",
-        "motion": "float",
-        "speed": "1.6s",
-        "delay": "0.30s",
+        "color": "#FBDCE5",
+        "glow": "#FFD9E8",
+        "motion": "shimmer",
+        "speed": "2.4s",
+        "delay": "0.50s",
         "entrance": "zoomIn"
       },
       {
         "char": "T",
-        "color": "#F472B6",
-        "glow": "#F9A8D4",
+        "color": "#FF6F61",
+        "glow": "#FF9E8A",
         "motion": "shimmer",
-        "speed": "1.4s",
-        "delay": "0.45s",
-        "entrance": "fadeInUp"
+        "speed": "2.4s",
+        "delay": "0.75s",
+        "entrance": "zoomIn"
       },
       {
         "char": "E",
-        "color": "#C084FC",
-        "glow": "#D8B4FE",
-        "motion": "pulse",
-        "speed": "1.5s",
-        "delay": "0.60s",
+        "color": "#FAF3E0",
+        "glow": "#FFF3C9",
+        "motion": "shimmer",
+        "speed": "2.4s",
+        "delay": "1.00s",
         "entrance": "zoomIn"
       },
       {
         "char": "R",
-        "color": "#FDE047",
-        "glow": "#FEF08A",
-        "motion": "bounce",
-        "speed": "1.4s",
-        "delay": "0.75s",
-        "entrance": "fadeInRight"
+        "color": "#FF8E7A",
+        "glow": "#FFC1B0",
+        "motion": "shimmer",
+        "speed": "2.4s",
+        "delay": "1.25s",
+        "entrance": "zoomIn"
       }
-    ],
-    "enabled": true,
-    "fontSize": "38px",
-    "letterSpacing": "6px"
+    ]
   },
   "theme": {
     "activePreset": "royal-gold",
@@ -7151,7 +7158,7 @@ const DEFAULT_LUSTER_STATE = {
   "motion": {
     "globalEnabled": true,
     "safetyThreshold": 24,
-    "smartAttentionEnabled": true,
+    "smartAttentionEnabled": false,
     "performanceLevel": "ultra",
     "rules": {
       "products": {
@@ -7173,13 +7180,13 @@ const DEFAULT_LUSTER_STATE = {
         "trigger": "press"
       },
       "prices": {
-        "type": "goldShine",
+        "type": "none",
         "speed": "2s",
         "intensity": "1",
         "trigger": "loop"
       },
       "badges": {
-        "type": "subtlePulse",
+        "type": "none",
         "speed": "1.8s",
         "intensity": "1",
         "trigger": "loop"
