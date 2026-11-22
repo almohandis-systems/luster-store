@@ -12,8 +12,9 @@
       '1446ebb5682ae0ad6bd3bbbfc531b8e5098665146f6dc87128f3be2c12fad9a4'
     ];
     function toHex(buf) { return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join(''); }
+    function normDigits(s) { return String(s).replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)); }
     async function hashCode(code) {
-      let data = new TextEncoder().encode(SALT + String(code));
+      let data = new TextEncoder().encode(SALT + normDigits(code));
       for (let i = 0; i < ITER; i++) { data = await crypto.subtle.digest('SHA-256', data); }
       return toHex(data);
     }
@@ -8323,6 +8324,87 @@ const DEFAULT_LUSTER_STATE = {
       "bundleItems": [
         "بودرة تبييض أكتيف أكسجين ١ كجم",
         "عبوة ٥٠٠ جم هدية"
+      ]
+    },
+    {
+      "id": "prod_238",
+      "sku": "LST-238",
+      "titleAr": "باقة التبييض الملكية (١ كجم + ٢ عبوة صغيرة)",
+      "titleEn": "Luster Royal Whitening Bundle",
+      "category": "bundles",
+      "isBundle": true,
+      "price": 90,
+      "originalPrice": 115,
+      "badge": "باقة توفير",
+      "descriptionAr": "باقة التبييض الكاملة: عبوة بودرة أكتيف أكسجين ١ كجم + عبوتين صغيرتين هدية للسفر والشغل. بياض ناصع لكل الغسيل بسعر موفر.",
+      "costPrice": 0,
+      "stock": 100,
+      "stockCount": 100,
+      "minStock": 5,
+      "supplier": "لاستر",
+      "image": "https://almohandis-systems.github.io/luster-store/media/prod_201.jpg",
+      "featured": false,
+      "rating": 5.0,
+      "reviewsCount": 0,
+      "inStock": true,
+      "options": [],
+      "bundleItems": [
+        "بودرة تبييض أكتيف أكسجين ١ كجم",
+        "٢ عبوة صغيرة هدية"
+      ]
+    },
+    {
+      "id": "prod_239",
+      "sku": "LST-239",
+      "titleAr": "باقة السجاد والمفروشات اللامعة",
+      "titleEn": "Luster Carpet & Upholstery Bundle",
+      "category": "bundles",
+      "isBundle": true,
+      "price": 85,
+      "originalPrice": 105,
+      "badge": "باقة توفير",
+      "descriptionAr": "باقة العناية بالسجاد والمفروشات: بتشيل البقع والأتربة العميقة وبتسيب ريحة نظيفة ولمعة واضحة من أول استخدام.",
+      "costPrice": 0,
+      "stock": 100,
+      "stockCount": 100,
+      "minStock": 5,
+      "supplier": "لاستر",
+      "image": "https://almohandis-systems.github.io/luster-store/media/prod_209.jpg",
+      "featured": false,
+      "rating": 5.0,
+      "reviewsCount": 0,
+      "inStock": true,
+      "options": [],
+      "bundleItems": [
+        "منظف السجاد والمفروشات المركز",
+        "عبوة إضافية بنفس الجودة"
+      ]
+    },
+    {
+      "id": "prod_240",
+      "sku": "LST-240",
+      "titleAr": "باقة الزجاج واللمعان الكريستالي",
+      "titleEn": "Luster Glass Shine Bundle",
+      "category": "bundles",
+      "isBundle": true,
+      "price": 75,
+      "originalPrice": 95,
+      "badge": "باقة توفير",
+      "descriptionAr": "باقة لمعان الزجاج والمرايات: بتسيب الأسطح الزجاجية شفافة من غير أثر ولا خطوط، مع عبوة إضافية للمطبخ والحمام.",
+      "costPrice": 0,
+      "stock": 100,
+      "stockCount": 100,
+      "minStock": 5,
+      "supplier": "لاستر",
+      "image": "https://almohandis-systems.github.io/luster-store/media/prod_218.jpg",
+      "featured": false,
+      "rating": 5.0,
+      "reviewsCount": 0,
+      "inStock": true,
+      "options": [],
+      "bundleItems": [
+        "ملمع الزجاج والمرايات",
+        "عبوة إضافية هدية"
       ]
     }
   ],
