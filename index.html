@@ -5986,7 +5986,7 @@ const DEFAULT_TEXT_REGISTRY = [
     sectionNameAr: 'المكافآت والولاء',
     labelAr: 'شرح برنامج السفراء (Referral Description)',
     selector: '.referral-desc',
-    defaultText: 'احصل على 150 ج.م رصيد بمحفظتك و 250 نقطة عن كل صديق يقتني من مجموعة LUSTER عبر رابطك الحصري.',
+    defaultText: 'مكافآت الإحالة يحددها المالك بعد التحقق من شروط الحملة. لا يوجد رصيد تلقائي.',
     defaultSize: '13px',
     defaultColor: '#C4C4C8',
     defaultWeight: '600',
@@ -7287,7 +7287,12 @@ const DEFAULT_LUSTER_STATE = {
     }
   },
   "loyalty": {
-    "pointsPerEGP": 1,
+    "pointsPerEGP": 0,
+    "enabled": false,
+    "earnRatePer100EGP": 0,
+    "firstOrderBonus": 0,
+    "minOrderToEarn": 0,
+    "maxRedeemPercent": 0,
     "pointValueEGP": 0.1,
     "tiers": [
       {
@@ -7348,13 +7353,7 @@ const DEFAULT_LUSTER_STATE = {
           "value": "LUSTER10",
           "prob": 0.25
         },
-        {
-          "id": "p2",
-          "textAr": "50 نقطة هدية",
-          "type": "points",
-          "value": 50,
-          "prob": 0.35
-        },
+
         {
           "id": "p3",
           "textAr": "شحن مجاني",
@@ -7362,13 +7361,7 @@ const DEFAULT_LUSTER_STATE = {
           "value": "FREESHIP",
           "prob": 0.2
         },
-        {
-          "id": "p4",
-          "textAr": "100 جنيه في محفظتك",
-          "type": "wallet",
-          "value": 100,
-          "prob": 0.1
-        },
+
         {
           "id": "p5",
           "textAr": "حظ أوفر المرة القادمة",
@@ -10880,7 +10873,8 @@ class LusterCloudBridge {
           shippingFee: Number(body.shippingFee) || 0,
           subtotalProducts: Number(body.subtotalProducts) || total,
           governorate: body.governorate || body.customer?.governorate || '',
-          pointsDiscountApplied: Number(body.pointsDiscountApplied) || 0,
+          pointsDiscountApplied: 0,
+          loyaltyStatus: 'requires_verified_customer_ledger',
           couponCode: body.couponCode || null,
           paymentMethod: ['cash','vodafoneCash','instapay'].includes(body.paymentMethod) ? body.paymentMethod : 'cash',
           transactionRef: body.transactionRef || null,
@@ -10905,6 +10899,7 @@ class LusterCloudBridge {
         };
 
         this.orders.unshift(newOrder);
+        lusterRememberDeviceOrder(newOrder);
         this.saveLocalOrders(this.orders);
 
         newOrder.deliveryConfirmed = false;
@@ -10921,7 +10916,8 @@ class LusterCloudBridge {
           new Promise(resolve => setTimeout(resolve, 2500))
         ]);
       } catch(e) {}
-      return buildRes({ success: true, orders: this.orders });
+      const allowed=this.auth?.currentUser?.uid==='UImYxitPLoVnAuJla2wfC2Apids2'?this.orders:this.orders.filter(order=>lusterDeviceOrderIds().has(order.orderId));
+      return buildRes({ success: true, orders: allowed });
     }
 
     // 2. ORDER STATUS UPDATE
@@ -11277,13 +11273,14 @@ class LusterCloudBridge {
     // 11. WHEEL OF FORTUNE SPIN
     if (cleanUrl === '/api/spin' && method === 'POST') {
       const config = (this.state && this.state.gamification && this.state.gamification.spinAndWin) || {};
-      const prizes = config.prizes || [
+      const prizes = (config.prizes || [
         { id: 'p1', textAr: 'خصم 10%', type: 'coupon', value: 'LUSTER10', prob: 0.25 },
-        { id: 'p2', textAr: '50 نقطة هدية', type: 'points', value: 50, prob: 0.35 },
+
         { id: 'p3', textAr: 'شحن مجاني', type: 'shipping', value: 'FREESHIP', prob: 0.2 },
-        { id: 'p4', textAr: '100 جنيه في محفظتك', type: 'wallet', value: 100, prob: 0.1 },
+
         { id: 'p5', textAr: 'حظ أوفر المرة القادمة', type: 'none', value: 0, prob: 0.1 }
-      ];
+      ]).filter(prize=>!['points','wallet'].includes(prize.type));
+      if(!prizes.length)return buildRes({success:false,error:'لا توجد جائزة معتمدة متاحة.'});
       const idx = Math.floor(Math.random() * prizes.length);
       return buildRes({ success: true, prize: prizes[idx], index: idx });
     }
@@ -11650,6 +11647,14 @@ class LusterCloudBridge {
     for(const product of cloned.products || []) for(const key of ['costPrice','unitCost','purchasePrice','supplier','supplierPhone','supplierInfo','profit','grossProfit','margin','internalNotes'])delete product[key];
     cloned.phoneManager={numbers:[{id:'owner_contact_20261122',number:'01099251781',label:'رقم لاستر الرسمي',visible:true,purposes:['call','whatsapp','support'],isPrimaryFor:['call','whatsapp','support']}]};
     if(cloned.brand){cloned.brand.phone='01099251781';cloned.brand.whatsapp='201099251781';}
+    if(cloned.loyalty){
+      const keys=['enabled','pointsPerEGP','pointValueEGP','earnRatePer100EGP','firstOrderBonus','minOrderToEarn','maxRedeemPercent','pointsExpiryDays','dailyEarnCap','tiers'];
+      cloned.loyalty=Object.fromEntries(keys.filter(key=>Object.hasOwn(cloned.loyalty,key)).map(key=>[key,cloned.loyalty[key]]));
+    }
+    if(Array.isArray(cloned.coupons))cloned.coupons=cloned.coupons.filter(coupon=>!coupon.targetAudience||coupon.targetAudience==='all').map(coupon=>{
+      const keys=['code','descriptionAr','descriptionEn','type','value','minOrder','maxDiscount','enabled','targetAudience','expiresAt'];
+      return Object.fromEntries(keys.filter(key=>Object.hasOwn(coupon,key)).map(key=>[key,coupon[key]]));
+    });
     const uploadPromises = [];
 
     const offloadDataField = (val, prefix) => {
@@ -11783,6 +11788,22 @@ if (typeof window !== 'undefined') {
 // LUSTER Visual Commerce - Client State & Persistence Engine
 // Real-time synchronization via Server-Sent Events (SSE) + LocalStorage Offline Support
 
+function lusterEscapeHtml(value) {
+  return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function lusterDeviceOrderIds() {
+  try {
+    const ids=JSON.parse(localStorage.getItem('luster_my_order_ids')||'[]');
+    const last=JSON.parse(localStorage.getItem('luster_last_order')||'null');
+    if(last?.orderId && !ids.includes(last.orderId))ids.push(last.orderId);
+    return new Set(ids.filter(id=>typeof id==='string' && /^[a-zA-Z0-9_-]{1,160}$/.test(id)));
+  }catch(e){return new Set();}
+}
+function lusterRememberDeviceOrder(order) {
+  if(!order?.orderId)return;
+  try{const ids=lusterDeviceOrderIds();ids.add(order.orderId);localStorage.setItem('luster_my_order_ids',JSON.stringify([...ids]));}catch(e){}
+}
+
 class LusterStore {
   grantWheelBonusSpins(count = 1) {
     try {
@@ -11792,16 +11813,37 @@ class LusterStore {
     } catch(e) {}
   }
 
+  initializeUnverifiedRewards() {
+    const legacy={points:this.loadLocal('luster_points',null),wallet:this.loadLocal('luster_wallet',null)};
+    const hasLegacy=Number(legacy.points?.balance)>0 || Number(legacy.points?.totalEarned)>0 || Number(legacy.points?.earned)>0 || Number(legacy.points?.spent)>0 || Number(legacy.wallet?.balance)>0 || (legacy.wallet?.transactions||[]).length>0;
+    this.points={balance:0,totalEarned:0,earned:0,spent:0,expired:0,tier:'bronze',verification:'awaiting_trusted_ledger'};
+    this.wallet={balance:0,transactions:[],verification:'awaiting_trusted_ledger'};
+    this.usePointsInCart=false;
+    try {
+      if(hasLegacy){
+        const savedArchive=this.loadLocal('luster_rewards_quarantine_v1',[]);
+        const archive=Array.isArray(savedArchive)?savedArchive:[];
+        const signature=JSON.stringify(legacy);
+        if(!archive.some(entry=>entry.signature===signature)){
+          archive.push({at:new Date().toISOString(),reason:'legacy_unverified_not_spendable',signature,...legacy});
+          localStorage.setItem('luster_rewards_quarantine_v1',JSON.stringify(archive));
+        }
+      }
+      localStorage.setItem('luster_points',JSON.stringify(this.points));
+      localStorage.setItem('luster_wallet',JSON.stringify(this.wallet));
+    } catch(e) {
+      // Keep the old stored evidence if an archive cannot be saved. Runtime balances stay zero.
+      console.warn('Legacy rewards retained for review; not available for spending.');
+    }
+  }
+
   constructor() {
     this.state = this.loadLocal('luster_cached_state', null) || JSON.parse(JSON.stringify(DEFAULT_LUSTER_STATE));
     this.listeners = new Map();
     this.history = [];
     this.orders = [];
     this.cart = this.loadLocal('luster_cart', []);
-    this.wallet = this.loadLocal('luster_wallet', { balance: 0, transactions: [
-      { id: 'tx_init', type: 'credit', amount: 500, note: 'رصيد ترحيبي ملكي من LUSTER', date: new Date().toISOString() }
-    ]});
-    this.points = this.loadLocal('luster_points', { balance: 350, tier: 'bronze', totalEarned: 350 });
+    this.initializeUnverifiedRewards();
     this.userRefCode = this.loadLocal('luster_my_ref_code', 'REF-' + Math.floor(1000 + Math.random() * 9000));
     this.activeCoupon = null;
     this.isStudioMode = false;
@@ -12128,14 +12170,8 @@ class LusterStore {
   }
 
   getPointsDiscountAmount() {
-    if (!this.usePointsInCart) return 0;
-    const subtotal = this.getCartSubtotal();
-    if (subtotal <= 0) return 0;
-    const balance = Number(this.points?.balance) || 0;
-    const pointValue = Number(this.state?.loyalty?.pointValueEGP) || 0.1;
-    const maxPointsEGP = Math.round(balance * pointValue);
-    const maxAllowedByRule = Math.round(subtotal * 0.20);
-    return Math.max(0, Math.min(maxPointsEGP, maxAllowedByRule));
+    // Browser balances are not an authenticated customer ledger. Never price an order from them.
+    return 0;
   }
 
   getCartTotal() {
@@ -12157,37 +12193,12 @@ class LusterStore {
 
   // Wallet Operations
   transactWallet(type, amount, note = '') {
-    if (type === 'debit' && this.wallet.balance < amount) {
-      return { success: false, message: 'رصيد المحفظة غير كافٍ' };
-    }
-    const delta = type === 'credit' ? amount : -amount;
-    this.wallet.balance += delta;
-    this.wallet.transactions.unshift({
-      id: 'tx_' + Date.now(),
-      type,
-      amount,
-      note,
-      date: new Date().toISOString()
-    });
-    this.saveLocal('luster_wallet', this.wallet);
-    this.emit('WALLET_UPDATED', this.wallet);
-    return { success: true, newBalance: this.wallet.balance };
+    return {success:false,requiresVerification:true,message:'لا يوجد سجل محفظة موثّق. لم تتم إضافة أو خصم رصيد.'};
   }
 
-  // Points & Loyalty
+  // Only a future authenticated, transactional customer ledger may credit or debit points.
   addPoints(pts, note = '') {
-    this.points.balance += pts;
-    this.points.totalEarned += pts;
-
-    // Recalculate Tier
-    const tiers = this.state.loyalty.tiers;
-    if (this.points.totalEarned >= 20000) this.points.tier = 'vip';
-    else if (this.points.totalEarned >= 7500) this.points.tier = 'gold';
-    else if (this.points.totalEarned >= 2500) this.points.tier = 'silver';
-    else this.points.tier = 'bronze';
-
-    this.saveLocal('luster_points', this.points);
-    this.emit('POINTS_UPDATED', this.points);
+    return {success:false,requiresVerification:true,message:'لم تتم إضافة أو خصم نقاط. يلزم التحقق من شرط الاستحقاق وسجل العميل أولاً.'};
   }
 
   // --- TEXT CUSTOMIZATION ENGINE ---
@@ -12418,7 +12429,7 @@ class CommerceEngine {
         ` : ''}
         ${pointsDiscount > 0 ? `
           <div style="display:flex; justify-content:space-between; font-size:14px; color:#FBBF24; margin-bottom:8px;">
-            <span>خصم نقاط الولاء (${pointsDiscount * 10} نقطة):</span>
+            <span>خصم نقاط الولاء:</span>
             <span style="font-weight:900;">-${pointsDiscount} ${currency}</span>
           </div>
         ` : ''}
@@ -12480,9 +12491,8 @@ class CommerceEngine {
     const ptsChk = containerEl.querySelector('#chk-cart-use-points');
     if (ptsChk) {
       ptsChk.onchange = () => {
-        this.store.usePointsInCart = ptsChk.checked;
-        if (ptsChk.checked && window.lusterSound) window.lusterSound.playCouponSuccess();
-        window.showToast(ptsChk.checked ? '✓ تم تفعيل خصم نقاط الولاء في السلة!' : 'تم إلغاء خصم النقاط', ptsChk.checked ? 'success' : 'info');
+        this.store.usePointsInCart=false;ptsChk.checked=false;
+        window.showToast('استخدام النقاط متوقف حتى التحقق من سجل العميل. لم يُخصم رصيد.', 'warning');
         this.renderCart(containerEl);
       };
     }
@@ -12504,254 +12514,24 @@ class CommerceEngine {
 
   // Render Real Wallet Drawer
   renderWallet(containerEl) {
-    if (!containerEl) return;
-    const state = this.store.getState() || {};
-    const points = this.store.points || { balance: 100, earned: 150, spent: 50, expired: 0, tier: 'silver' };
-    const earned = points.earned || points.balance || 100;
-    const spent = points.spent || 0;
-    const expired = points.expired || 0;
-    const balance = points.balance || 100;
-
-    const allCoupons = state.coupons || [];
-    const availableCoupons = allCoupons.filter(c => c.enabled !== false);
-    const usedCoupons = (state.usedCoupons || []);
-    const expiredCoupons = (state.expiredCoupons || []);
-
-    const currency = state.brand?.currency || 'ج.م';
-
-    // Qualified rewards based on points
-    const qualifiedRewards = [
-      { id: 'rew_1', titleAr: 'خصم 20 ج.م على طلبك القادم', pointsRequired: 100, isQualified: balance >= 100, minOrder: 150 },
-      { id: 'rew_2', titleAr: 'شحن ملكي مجاني 🛵', pointsRequired: 200, isQualified: balance >= 200, minOrder: 250 },
-      { id: 'rew_3', titleAr: 'قسيمة خصم ذهبية 50 ج.م', pointsRequired: 400, isQualified: balance >= 400, minOrder: 400 }
-    ];
-
-    containerEl.innerHTML = `
-      <div style="display:flex; flex-direction:column; gap:16px;">
-
-        <!-- Header Notice (Points are NOT cash) -->
-        <div style="background:linear-gradient(135deg, #1C1B24 0%, #2A2838 100%); border:2px solid var(--accent-gold); border-radius:var(--radius-lg); padding:20px; text-align:center; box-shadow:0 10px 30px rgba(0,0,0,0.5);">
-          <div style="font-size:13px; font-weight:800; color:var(--text-muted); margin-bottom:4px;">محفظة مزايا وعضوية LUSTER</div>
-          <div style="font-size:32px; font-weight:900; color:var(--accent-gold-light); font-family:var(--font-luxury); line-height:1.2;">
-            ${balance} <span style="font-size:16px; color:var(--text-secondary);">نقطة ولاء</span>
-          </div>
-          <div style="font-size:11px; color:#A7F3D0; font-weight:800; margin-top:4px;">
-            ✦ رصيد نقاط معتمد للخصم المباشر في السلة (النقاط ليست أموالاً نقدية)
-          </div>
-        </div>
-
-        <!-- 1. ⭐ نقاطي -->
-        <div style="background:#13131A; border:1px solid rgba(212,175,55,0.25); border-radius:var(--radius-md); padding:16px;">
-          <div style="font-size:15px; font-weight:900; color:var(--accent-gold); margin-bottom:12px; display:flex; align-items:center; gap:8px;">
-            <span>⭐</span> نقاطي (Points Overview)
-          </div>
-          <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:10px; margin-bottom:12px;">
-            <div style="background:var(--bg-secondary); padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-subtle); text-align:center;">
-              <div style="font-size:10px; color:var(--text-muted);">إجمالي النقاط الحالية</div>
-              <div style="font-size:18px; font-weight:900; color:var(--accent-gold);">${balance}</div>
-            </div>
-            <div style="background:var(--bg-secondary); padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-subtle); text-align:center;">
-              <div style="font-size:10px; color:var(--text-muted);">النقاط المكتسبة</div>
-              <div style="font-size:18px; font-weight:900; color:#50C878;">+${earned}</div>
-            </div>
-            <div style="background:var(--bg-secondary); padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-subtle); text-align:center;">
-              <div style="font-size:10px; color:var(--text-muted);">النقاط المستخدمة</div>
-              <div style="font-size:18px; font-weight:900; color:#FCA5A5;">-${spent}</div>
-            </div>
-            <div style="background:var(--bg-secondary); padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-subtle); text-align:center;">
-              <div style="font-size:10px; color:var(--text-muted);">النقاط المنتهية</div>
-              <div style="font-size:18px; font-weight:900; color:var(--text-muted);">${expired}</div>
-            </div>
-          </div>
-          <button id="btn-use-points-in-cart" class="btn-luxury-gold" style="width:100%; padding:10px; font-size:12px; font-weight:900;">
-            تطبيق خصم النقاط في السلة 🛒
-          </button>
-        </div>
-
-        <!-- 2. 🎟️ كوبوناتي -->
-        <div style="background:#13131A; border:1px solid rgba(56,189,248,0.25); border-radius:var(--radius-md); padding:16px;">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-            <div style="font-size:15px; font-weight:900; color:#38BDF8; display:flex; align-items:center; gap:8px;">
-              <span>🎟️</span> كوبوناتي (My Coupons)
-            </div>
-            <span style="font-size:11px; color:#38BDF8; font-weight:800;">${availableCoupons.length} متاح</span>
-          </div>
-
-          <div style="display:flex; flex-direction:column; gap:8px;">
-            ${availableCoupons.length === 0 ? '<div style="font-size:12px; color:var(--text-muted); text-align:center;">لا توجد كوبونات متاحة حالياً.</div>' : availableCoupons.map(c => `
-              <div style="padding:10px 12px; background:var(--bg-secondary); border-radius:var(--radius-sm); border:1px dashed var(--accent-gold); display:flex; justify-content:space-between; align-items:center;">
-                <div>
-                  <div style="font-size:13px; font-weight:900; color:var(--accent-gold-light); font-family:monospace;">${c.code}</div>
-                  <div style="font-size:11px; color:#FFF; margin-top:2px;">${c.descriptionAr || 'خصم خاص'}</div>
-                  <div style="font-size:10px; color:var(--text-muted);">الحد الأدنى للطلب: ${c.minOrder || 150} ${currency}</div>
-                </div>
-                <button class="btn-apply-coupon-wallet btn-luxury-outline" data-code="${c.code}" style="padding:6px 12px; font-size:11px; font-weight:800; border-color:var(--accent-gold); color:var(--accent-gold);">
-                  تطبيق ➔
-                </button>
-              </div>
-            `).join('')}
-          </div>
-        </div>
-
-        <!-- 3. 🎁 مكافآتي -->
-        <div style="background:#13131A; border:1px solid rgba(192,132,252,0.25); border-radius:var(--radius-md); padding:16px;">
-          <div style="font-size:15px; font-weight:900; color:#C084FC; margin-bottom:12px; display:flex; align-items:center; gap:8px;">
-            <span>🎁</span> مكافآتي المؤهل لها (Qualified Rewards)
-          </div>
-          <div style="display:flex; flex-direction:column; gap:8px;">
-            ${qualifiedRewards.map(r => `
-              <div style="padding:10px 12px; background:var(--bg-secondary); border-radius:var(--radius-sm); border:1px solid ${r.isQualified ? '#50C878' : 'var(--border-subtle)'}; display:flex; justify-content:space-between; align-items:center;">
-                <div>
-                  <div style="font-size:12px; font-weight:900; color:${r.isQualified ? '#FFF' : 'var(--text-muted)'};">${r.titleAr}</div>
-                  <div style="font-size:10px; color:var(--text-muted);">المطلوب: ${r.pointsRequired} نقطة | الحد الأدنى للطلب: ${r.minOrder} ${currency}</div>
-                </div>
-                <span style="font-size:11px; font-weight:800; color:${r.isQualified ? '#50C878' : 'var(--text-muted)'};">
-                  ${r.isQualified ? '✓ مؤهل للاستخدام' : `متبقي ${r.pointsRequired - balance} نقطة`}
-                </span>
-              </div>
-            `).join('')}
-          </div>
-        </div>
-
-        <!-- 4. 📋 سجل الحركات -->
-        <div style="background:#13131A; border:1px solid rgba(255,255,255,0.08); border-radius:var(--radius-md); padding:16px;">
-          <div style="font-size:15px; font-weight:900; color:#FFF; margin-bottom:12px; display:flex; align-items:center; gap:8px;">
-            <span>📋</span> سجل الحركات والعمليات (Activity Log)
-          </div>
-          <div style="display:flex; flex-direction:column; gap:8px;">
-            <div style="padding:8px 12px; background:var(--bg-secondary); border-radius:var(--radius-sm); border:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center;">
-              <div>
-                <div style="font-size:12px; font-weight:800; color:#FFF;">هدية ترحيبية: نقاط العضوية الملكية</div>
-                <div style="font-size:10px; color:var(--text-muted);">تسجيل عميل مؤكد</div>
-              </div>
-              <div style="font-size:12px; font-weight:900; color:#50C878;">+${earned} نقطة</div>
-            </div>
-            ${spent > 0 ? `
-              <div style="padding:8px 12px; background:var(--bg-secondary); border-radius:var(--radius-sm); border:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center;">
-                <div>
-                  <div style="font-size:12px; font-weight:800; color:#FFF;">استخدام خصم في طلب سابق</div>
-                  <div style="font-size:10px; color:var(--text-muted);">خصم مباشر بالسلة</div>
-                </div>
-                <div style="font-size:12px; font-weight:900; color:#FCA5A5;">-${spent} نقطة</div>
-              </div>
-            ` : ''}
-          </div>
-        </div>
-
-      </div>
-    `;
-
-    const usePointsBtn = containerEl.querySelector('#btn-use-points-in-cart');
-    if (usePointsBtn) {
-      usePointsBtn.onclick = () => {
-        this.store.usePointsInCart = true;
-        if (window.lusterSound) window.lusterSound.playCouponSuccess();
-        window.showToast('✓ تم تفعيل خصم نقاط الولاء في سلتك مباشرة!', 'success');
-        window.openCartDrawer();
-      };
-    }
-
-    containerEl.querySelectorAll('.btn-apply-coupon-wallet').forEach(btn => {
-      btn.onclick = () => {
-        const code = btn.dataset.code;
-        const res = this.store.applyCoupon(code);
-        if (res && res.success) {
-          window.showToast(`✓ تم تطبيق الكوبون (${code}) بنجاح على سلتك!`, 'success');
-          window.openCartDrawer();
-        } else {
-          window.showToast(res?.message || 'تعذر تطبيق الكوبون', 'error');
-        }
-      };
-    });
+    if(!containerEl)return;
+    containerEl.innerHTML=`<section style="padding:20px;border:1px solid var(--accent-gold);border-radius:14px;background:var(--bg-card);text-align:center;line-height:1.9;">
+      <h3 style="color:var(--accent-gold);margin:0 0 12px;">محفظتي</h3>
+      <div style="font-size:26px;font-weight:900;color:#fff;">0 نقطة</div>
+      <div style="font-size:16px;color:#fff;">رصيد المحفظة المتاح: 0 ج.م</div>
+      <p style="font-size:13px;color:var(--text-secondary);">لا توجد أرصدة أو هدايا افتراضية، ولا حركات أو مكافآت شخصية معتمدة.</p>
+      <p style="font-size:12px;color:#fde68a;">اكتساب النقاط واستخدامها يحتاجان تحققًا من شروط المالك وسجل العميل. القيم المحلية السابقة غير الموثّقة محفوظة للمراجعة، وليست رصيدًا متاحًا للصرف.</p>
+    </section>`;
   }
 
-  // Render Real Points & Membership Tiers (Digital Pass)
   renderPoints(containerEl) {
-    if (!containerEl) return;
-    const points = this.store.points || { balance: 100, tier: 'silver' };
-    const state = this.store.getState() || {};
-    const tiers = state.loyalty?.tiers || [];
-    const currentTier = tiers.find(t => t.id === points.tier) || tiers[0] || { nameAr: 'الفضي', perksAr: 'خصم 1% نقاط' };
-    const pointValue = state.loyalty?.pointValueEGP || 0.1;
-    const pointsCash = Math.round(points.balance * pointValue);
-    const currency = state.brand?.currency || 'ج.م';
-
-    containerEl.innerHTML = `
-      <!-- VIP Digital Pass Card -->
-      <div style="background:linear-gradient(135deg, #1A1A22 0%, #0E0E14 100%); border:2px solid var(--accent-gold); border-radius:var(--radius-lg); padding:20px; position:relative; overflow:hidden; margin-bottom:18px; box-shadow:0 12px 35px var(--accent-gold-glow);">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
-          <div>
-            <div style="font-size:17px; font-weight:900; color:#FFF; font-family:var(--font-luxury); letter-spacing:2px;">LUSTER VIP PASS</div>
-            <div style="font-size:11px; color:var(--accent-gold); font-weight:800;">برنامج مكافآت النخبة المعتمد</div>
-          </div>
-          <div style="font-size:26px;">👑</div>
-        </div>
-
-        <div style="margin-bottom:14px;">
-          <div style="font-size:11px; color:var(--text-muted); font-weight:700;">رصيد النقاط المؤكدة</div>
-          <div style="font-size:36px; font-weight:900; color:var(--accent-gold-light); line-height:1.1;">
-            ${points.balance} <span style="font-size:15px; color:var(--text-secondary);">نقطة</span>
-          </div>
-          <div style="font-size:12px; color:#50C878; font-weight:800; margin-top:4px;">
-            تمنحك خصماً مباشراً بقيمة ${pointsCash} ${currency} في طلبك القادم
-          </div>
-        </div>
-
-        <div style="border-top:1px solid var(--border-subtle); padding-top:10px; display:flex; justify-content:space-between; align-items:center;">
-          <div>
-            <div style="font-size:10px; color:var(--text-muted);">مستواك الملكي الحالي:</div>
-            <div style="font-size:13px; font-weight:900; color:#FFF;">${currentTier.nameAr}</div>
-          </div>
-          <div style="text-align:left;">
-            <div style="font-size:10px; color:var(--text-muted);">المزايا:</div>
-            <div style="font-size:11px; font-weight:800; color:var(--accent-gold-light);">${currentTier.perksAr}</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Safe Earning & Spending Rules -->
-      <div style="background:var(--bg-secondary); border:1px solid var(--border-subtle); border-radius:var(--radius-sm); padding:14px; margin-bottom:18px; font-size:12px; line-height:1.7; color:var(--text-secondary);">
-        <div style="font-weight:900; color:var(--accent-gold); margin-bottom:6px;">⚖️ قواعد برنامج النقاط:</div>
-        <div>• <strong>الاكتساب:</strong> تحصل على 5 نقاط مع كل 100 ج.م مشتريات مؤكدة.</div>
-        <div>• <strong>الاستخدام:</strong> كل 10 نقاط = 1 ج.م خصم مباشر في سلتك.</div>
-        <div>• <strong>حد الخصم:</strong> يمكنك استخدام النقاط بحد أقصى 20% من إجمالي قيمة أي طلب (لضمان تغطية تكاليف التشغيل).</div>
-        <div>• <strong>الصلاحية:</strong> تظل نقاطك نشطة دائماً مع استمرار التسوق الدوري.</div>
-      </div>
-
-      <!-- Tier Progression System -->
-      <h4 style="font-size:14px; font-weight:900; margin-bottom:10px; color:var(--text-primary);">مستويات العضوية ومزاياها</h4>
-      <div style="display:flex; flex-direction:column; gap:8px;">
-        ${tiers.map(t => `
-          <div style="padding:10px 14px; background:var(--bg-secondary); border-radius:var(--radius-sm); border:1px solid ${t.id === points.tier ? 'var(--accent-gold)' : 'var(--border-subtle)'}; display:flex; justify-content:space-between; align-items:center;">
-            <div>
-              <div style="font-size:13px; font-weight:900; color:${t.id === points.tier ? 'var(--accent-gold-light)' : '#FFF'};">
-                ${t.nameAr} ${t.id === points.tier ? '★ (مستواك الحالي)' : ''}
-              </div>
-              <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">${t.perksAr}</div>
-            </div>
-            <div style="font-size:11px; font-weight:800; color:var(--text-secondary); text-align:left;">
-              ${t.minSpend > 0 ? `مشتريات من ${t.minSpend} ج.م` : 'مجاني للجميع'}
-            </div>
-          </div>
-        `).join('')}
-      </div>
-
-      <div style="margin-top:16px;">
-        <button id="btn-points-use-cart" class="btn-luxury-gold" style="width:100%; padding:12px; font-size:13px; font-weight:900;">
-          🛒 التسوق واستخدام النقاط الآن
-        </button>
-      </div>
-    `;
-
-    const useBtn = containerEl.querySelector('#btn-points-use-cart');
-    if (useBtn) {
-      useBtn.onclick = () => {
-        this.store.usePointsInCart = true;
-        if (window.lusterSound) window.lusterSound.playCouponSuccess();
-        window.showToast('✓ تم تفعيل خصم نقاط الولاء في سلتك مباشرة!', 'success');
-        window.openCartDrawer();
-      };
-    }
+    if(!containerEl)return;
+    containerEl.innerHTML=`<section style="padding:20px;border:1px solid var(--accent-gold);border-radius:14px;background:var(--bg-card);line-height:1.9;">
+      <h3 style="color:var(--accent-gold);margin:0 0 12px;">نقاطي</h3>
+      <div style="text-align:center;font-size:30px;font-weight:900;color:#fff;">0 نقطة متاحة</div>
+      <p style="font-size:13px;color:var(--text-secondary);">لا تُضاف نقطة بمجرد زيارة المتجر أو إرسال طلب أو تدوير العجلة. لا يمكن صرف رصيد محلي غير موثّق.</p>
+      <p style="font-size:12px;color:#fde68a;">الاكتساب والاستبدال متوقفان حتى التحقق من شروط المالك وربط سجل العميل. لا يوجد خصم نقاط مطبّق حاليًا.</p>
+    </section>`;
   }
 
   // Render Coupon Showcase with Scratch & Reveal Feature
@@ -13234,9 +13014,7 @@ class CommerceEngine {
             if (window.lusterSound) window.lusterSound.playOrderSuccess();
           } catch(e) {}
 
-          // Award loyalty points
-          const earnedPts = Math.round(total / 10);
-          this.store.addPoints(earnedPts, `نقاط مكتسبة عن طلب رقم ${data.order.orderId}`);
+          // No points are earned from an unverified/new/unpaid order submission.
 
           // Clear cart
           this.store.clearCart();
@@ -13275,12 +13053,15 @@ class CommerceEngine {
           createdAt: new Date().toISOString(),
           items: [...this.store.cart],
           customer,
-          totalAmount: total,
+          totalAmount: grandTotal,
+          subtotalProducts: total,
+          shippingFee,
+          pointsDiscountApplied: 0,
           isPartialPayment: false,
           paymentStatus: 'unpaid',
           amountPaid: 0,
-          depositAmount: isPartial ? Math.round(total * 0.2) : total,
-          remainingAmount: isPartial ? Math.round(total * 0.8) : 0,
+          depositAmount: 0,
+          remainingAmount: grandTotal,
           paymentMethod: selectedPaymentMethod,
           status: 'جديد',
           statusCode: 'new',
@@ -13301,6 +13082,7 @@ class CommerceEngine {
             }
           ]
         };
+        lusterRememberDeviceOrder(localOrder);
         localOrder.deliveryConfirmed = false;
         window.lusterCloudBridge?.queueOrder(localOrder);
         window.lusterCloudBridge?.flushPendingOrders();
@@ -13402,39 +13184,11 @@ class CommerceEngine {
 
   _renderOrdersCenterDOM(containerEl, orders = []) {
 
-    // STRICT CUSTOMER PRIVACY ISOLATION:
-    // Each customer ONLY sees their own orders (matching their saved phone or device order IDs),
-    // or orders matching an explicit phone/Order-ID search query.
-    let filterQuery = (containerEl.dataset.filterQuery || '').trim();
-    let savedPhone = '';
-    let myOrderIds = [];
-    try {
-      savedPhone = (localStorage.getItem('luster_customer_phone') || '').replace(/\D/g, '');
-      myOrderIds = JSON.parse(localStorage.getItem('luster_my_order_ids') || '[]');
-      const lastOrd = JSON.parse(localStorage.getItem('luster_last_order') || 'null');
-      if (lastOrd && lastOrd.orderId && !myOrderIds.includes(lastOrd.orderId)) {
-        myOrderIds.push(lastOrd.orderId);
-      }
-    } catch(e) {}
-
-    let displayedOrders = [];
-    if (filterQuery) {
-      const qLower = filterQuery.toLowerCase().trim();
-      const qDigits = qLower.replace(/\D/g, '');
-      displayedOrders = orders.filter(o => {
-        const p = (o.customer?.phone || '').replace(/\D/g, '');
-        const id = (o.orderId || '').toLowerCase();
-        return id === qLower || id.includes(qLower) || (qDigits.length >= 8 && p.includes(qDigits));
-      });
-    } else {
-      displayedOrders = orders.filter(o => {
-        if (!o || !o.orderId) return false;
-        if (myOrderIds.includes(o.orderId)) return true;
-        const p = (o.customer?.phone || '').replace(/\D/g, '');
-        if (savedPhone && savedPhone.length >= 10 && p === savedPhone) return true;
-        return false;
-      });
-    }
+    // A phone number or guessed/partial order ID is not proof of ownership.
+    const filterQuery=(containerEl.dataset.filterQuery||'').trim();
+    const myOrderIds=lusterDeviceOrderIds();
+    const ownOrders=orders.filter(order=>order && myOrderIds.has(order.orderId));
+    const displayedOrders=filterQuery?ownOrders.filter(order=>String(order.orderId).toLowerCase().includes(filterQuery.toLowerCase())):ownOrders;
 
     const state = this.store.getState();
     const phoneMgr = state.phoneManager || { numbers: [] };
@@ -13443,10 +13197,10 @@ class CommerceEngine {
     let searchHeaderHtml = `
       <div style="background:var(--bg-secondary); border:1.5px solid var(--accent-gold); border-radius:var(--radius-sm); padding:14px; margin-bottom:16px;">
         <label style="font-size:12px; font-weight:800; color:var(--accent-gold); display:block; margin-bottom:6px;">
-          🔍 تتبع شحنتك لحظياً برقم الهاتف أو رقم الطلب (متاح من أي هاتف):
+          🔍 البحث برقم الطلب داخل السجل المحفوظ على هذا المتصفح فقط:
         </label>
         <div style="display:flex; gap:8px;">
-          <input type="text" id="track-order-search-input" value="${filterQuery}" placeholder="أدخل رقم هاتفك أو كود الطلب (مثل LUST-123456)..."
+          <input type="text" id="track-order-search-input" value="${filterQuery.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]))}" placeholder="ابحث عن طلب محفوظ على هذا الجهاز..."
                  style="flex:1; padding:9px 12px; background:var(--bg-card); color:#FFF; border:1px solid var(--border-subtle); border-radius:var(--radius-sm); font-size:12px; font-weight:800;">
           <button id="btn-do-track-search" class="btn-luxury-gold" style="padding:9px 16px; font-size:12px; font-weight:900;">
             بحث
@@ -13466,7 +13220,7 @@ class CommerceEngine {
               ${filterQuery ? 'لم يتم العثور على طلبات مطابقة لهذا البحث' : 'لا توجد طلبات سابقة مسجلة حتى الآن'}
             </h3>
             <p style="color:var(--text-muted); font-size:12px; max-width:320px; margin:0 auto 20px;">
-              ${filterQuery ? 'تأكد من كتابة رقم الهاتف أو كود الطلب بشكل صحيح كما تم إدخاله أثناء الشراء.' : 'تفضل باستكشاف تشكيلة LUSTER الملكية والطلب لتظهر شحنتك فوراً هنا.'}
+              ${filterQuery ? 'ابحث برقم طلب مسجّل على هذا المتصفح. رقم الهاتف وحده لا يتيح الاطلاع على الطلبات.' : 'تفضل باستكشاف تشكيلة LUSTER الملكية والطلب لتظهر شحنتك فوراً هنا.'}
             </p>
             <button id="btn-orders-explore" class="btn-luxury-gold" style="padding:10px 20px; font-size:13px;">
               ✦ استكشف المجموعات الملكية
@@ -13513,7 +13267,7 @@ class CommerceEngine {
       <div style="display:flex; flex-direction:column; gap:16px; padding:4px 0;">
         ${searchHeaderHtml}
         <div style="background:rgba(212,175,55,0.08); border:1px solid var(--border-subtle); border-radius:var(--radius-sm); padding:12px; font-size:12px; color:var(--text-secondary);">
-          🔒 <strong>خصوصيتك محمية 100%:</strong> تعرض هذه القائمة طلباتك الخاصة فقط المسجلة من هاتفك، ويمكنك البحث برقم الهاتف أو كود الطلب في أي وقت.
+          <strong>نسخة هذا المتصفح:</strong> تعرض القائمة الطلبات المرتبطة بسجل هذا الجهاز فقط. البحث لا يفتح طلبات شخص آخر. مسح بيانات الموقع أو تغيير المتصفح قد يفقد النسخة المحلية؛ الطلب المؤكد سحابيًا تبقى نسخته لدى المالك.
         </div>
     `;
 
@@ -13524,11 +13278,13 @@ class CommerceEngine {
       const remaining = isPartial ? Math.round(order.totalAmount * 0.8) : 0;
 
       const paymentLabels = {
+        vodafoneCash: 'فودافون كاش',
+        cash: 'الدفع عند الاستلام',
         vodafone: 'فودافون كاش 💳',
         instapay: 'إنستاباي InstaPay ⚡',
         cod: 'الدفع عند الاستلام 🚚'
       };
-      const payLabel = paymentLabels[order.paymentMethod] || 'بوابة دفع معتمدة';
+      const payLabel = paymentLabels[order.paymentMethod] || 'طريقة الدفع غير مسجلة';
 
       html += `
         <div class="order-tracking-card" data-order-id="${order.orderId}">
@@ -13539,14 +13295,14 @@ class CommerceEngine {
             </div>
             <div class="order-status-badge">
               <span>✓</span>
-              <span>${order.status || 'تم استلام الطلب'}</span>
+              <span>${lusterEscapeHtml(order.status || 'بانتظار التأكيد')}</span>
             </div>
           </div>
 
           <!-- Per-Order OTP & Live Tracking Stepper -->
           <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(212,175,55,0.12); border:1px solid rgba(212,175,55,0.3); border-radius:var(--radius-sm); padding:8px 12px; margin:6px 0; font-size:12px;">
             <span>🔑 <strong>رمز التحقق السري (OTP):</strong></span>
-            <span style="font-family:monospace; font-size:14px; font-weight:900; color:var(--accent-gold); letter-spacing:2px;">${order.otpCode || 'مؤكد'}</span>
+            <span style="font-family:monospace; font-size:14px; font-weight:900; color:var(--accent-gold); letter-spacing:2px;">${lusterEscapeHtml(order.otpCode || 'غير مسجل')}</span>
           </div>
 
           <div style="margin:8px 0; padding:12px; background:rgba(0,0,0,0.4); border-radius:var(--radius-sm); border:1px solid rgba(255,255,255,0.06);">
@@ -13565,12 +13321,12 @@ class CommerceEngine {
             </div>
             ${order.courierName ? `
               <div style="margin-top:10px; padding:8px 10px; background:rgba(212,175,55,0.08); border-radius:var(--radius-sm); border:1px solid rgba(212,175,55,0.2); font-size:11px; color:#FFF;">
-                🛵 <strong>مندوب التوصيل الملكي:</strong> ${order.courierName} | 📱 <a href="tel:${order.courierPhone}" style="color:var(--accent-gold); font-weight:800;">${order.courierPhone}</a>
+                🛵 <strong>مندوب التوصيل الملكي:</strong> ${lusterEscapeHtml(order.courierName)} | 📱 <a href="tel:${String(order.courierPhone||'').replace(/[^+0-9]/g,'')}" style="color:var(--accent-gold); font-weight:800;">${lusterEscapeHtml(order.courierPhone)}</a>
               </div>
             ` : ''}
             ${order.cancellationReason ? `
               <div style="margin-top:8px; padding:6px 10px; background:rgba(239,68,68,0.15); border-radius:var(--radius-sm); font-size:11px; color:#FCA5A5; font-weight:800;">
-                ✕ تم إلغاء الطلب: ${order.cancellationReason}
+                ✕ تم إلغاء الطلب: ${lusterEscapeHtml(order.cancellationReason)}
               </div>
             ` : ''}
           </div>
@@ -13579,8 +13335,8 @@ class CommerceEngine {
             ${(order.items || []).map(item => `
               <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px; border-bottom:1px dashed rgba(255,255,255,0.06); padding-bottom:6px;">
                 <div>
-                  <strong style="color:#FFF;">${item.titleAr || item.title || 'مقتنى فاخر'}</strong>
-                  <div style="font-size:11px; color:var(--text-muted);">الكمية: ${item.qty || 1} | ${item.selectedSize ? 'الحجم: ' + item.selectedSize : ''}</div>
+                  <strong style="color:#FFF;">${lusterEscapeHtml(item.titleAr || item.title || 'مقتنى فاخر')}</strong>
+                  <div style="font-size:11px; color:var(--text-muted);">الكمية: ${lusterEscapeHtml(item.quantity || item.qty || 1)} | ${lusterEscapeHtml(item.selectedSize ? 'الحجم: ' + item.selectedSize : '')}</div>
                 </div>
                 <div style="font-weight:900; color:var(--accent-gold);">${(item.price || 0) * (item.qty || 1)} ج.م</div>
               </div>
@@ -13590,7 +13346,7 @@ class CommerceEngine {
           <div style="background:var(--bg-primary); border-radius:var(--radius-sm); padding:10px; font-size:12px; display:flex; flex-direction:column; gap:4px;">
             <div style="display:flex; justify-content:space-between;">
               <span style="color:var(--text-muted);">إجمالي الطلب:</span>
-              <strong style="color:#FFF;">${order.totalAmount} ج.م</strong>
+              <strong style="color:#FFF;">${lusterEscapeHtml(order.totalAmount)} ج.م</strong>
             </div>
             <div style="display:flex; justify-content:space-between;">
               <span style="color:var(--text-muted);">طريقة الدفع:</span>
@@ -14124,9 +13880,9 @@ class ExperienceEngine {
       forcedWinningSector: "auto",
       prizes: [
         { id: "p1", textAr: "خصم 10%", type: "coupon", value: "LUSTER10", prob: 0.25 },
-        { id: "p2", textAr: "50 نقطة هدية", type: "points", value: 50, prob: 0.35 },
+
         { id: "p3", textAr: "شحن مجاني", type: "shipping", value: "FREESHIP", prob: 0.2 },
-        { id: "p4", textAr: "50 ج.م في محفظتك", type: "wallet", value: 50, prob: 0.1 },
+
         { id: "p5", textAr: "حظ أوفر المرة القادمة", type: "none", value: 0, prob: 0.1 }
       ]
     };
@@ -14160,7 +13916,8 @@ class ExperienceEngine {
 
     const availableSpins = Math.max(requireOrder ? 0 : 1, totalAllowedSpins - (wheelHistory.usedSpins || 0));
 
-    const prizes = config.prizes || [];
+    const prizes=(config.prizes||[]).filter(prize=>!['points','wallet'].includes(prize.type));
+    if(!prizes.length)prizes.push({id:'none',type:'none',textAr:'لا توجد جائزة مفعّلة',value:0,prob:1});
     const numSlices = Math.max(1, prizes.length);
     const sliceAngle = 360 / numSlices;
 
@@ -14334,7 +14091,8 @@ class ExperienceEngine {
         }
 
         if (requiredCost > 0) {
-          this.store.addPoints(-requiredCost, 'تكلفة إدارة عجلة الحظ');
+          window.showToast('التدوير مقابل نقاط متوقف حتى تفعيل سجل نقاط موثّق. لم تُخصم نقاط.', 'warning');
+          return;
         }
 
         this.isSpinning = true;
@@ -14481,14 +14239,12 @@ class ExperienceEngine {
 
           if (selectedPrize.type === 'points') {
             const pts = Number(selectedPrize.value) || 50;
-            this.store.addPoints(pts, 'جائزة عجلة الحظ');
-            toastMsg = `🎉 مبارك! ربحت ${selectedPrize.textAr}!`;
-            subMsg = `تمت إضافة ${pts} نقطة إلى رصيدك فورًا ✦`;
+            toastMsg = 'لم تتم إضافة نقاط';
+            subMsg = 'جائزة النقاط تحتاج اعتماد شرط الاستحقاق في سجل عميل موثّق. لا تُضاف نقاط تلقائيًا.';
           } else if (selectedPrize.type === 'wallet') {
             const val = Number(selectedPrize.value) || 50;
-            this.store.transactWallet('credit', val, 'جائزة عجلة الحظ');
-            toastMsg = `🎉 مبارك! فزت بـ ${selectedPrize.textAr}!`;
-            subMsg = `تم إيداع ${val} ج.م في محفظتك وجاهزة للاستخدام ✦`;
+            toastMsg = 'لم تتم إضافة رصيد للمحفظة';
+            subMsg = 'الرصيد يحتاج اعتمادًا في سجل عميل موثّق. لا يوجد إيداع افتراضي.';
           } else if (selectedPrize.type === 'coupon' || selectedPrize.type === 'shipping' || selectedPrize.type === 'discount') {
             this.store.applyCoupon(selectedPrize.value);
             toastMsg = `🎉 تهانينا! فزت بـ ${selectedPrize.textAr}!`;
@@ -21923,9 +21679,9 @@ class LusterOwnerDashboard {
       forcedWinningSector: 'auto',
       prizes: [
         { id: 'prize_1', textAr: 'خصم 10%', type: 'discount', value: 10, prob: 0.3 },
-        { id: 'prize_2', textAr: '50 نقطة', type: 'points', value: 50, prob: 0.25 },
+
         { id: 'prize_3', textAr: 'شحن مجاني', type: 'shipping', value: 0, prob: 0.2 },
-        { id: 'prize_4', textAr: '50 ج.م', type: 'wallet', value: 50, prob: 0.15 },
+
         { id: 'prize_5', textAr: 'قسيمة 250 ج.م', type: 'coupon', value: 250, prob: 0.1 }
       ]
     };
@@ -22239,19 +21995,8 @@ class LusterOwnerDashboard {
       };
     }
 
-    const rulesBtn = container.querySelector('#btn-copy-firestore-rules');
-    if (rulesBtn) {
-      rulesBtn.onclick = () => {
-        const rules = `rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    match /luster_orders/{orderId} {\n      allow read, create: if true;\n      allow update, delete: if true;\n    }\n    match /luster_store/{document=**} {\n      allow read: if true;\n      allow write: if true;\n    }\n  }\n}`;
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(rules).then(() => {
-            window.showToast('✓ تم نسخ قواعد الحماية للحافظة! يمكنك لصقها في Firebase Console', 'success');
-          });
-        } else {
-          prompt('قواعد أمان Firestore جاهزة للنسخ:', rules);
-        }
-      };
-    }
+    const rulesBtn=container.querySelector('#btn-copy-firestore-rules');
+    if(rulesBtn){rulesBtn.disabled=true;rulesBtn.textContent='قواعد الطلبات الخاصة نشطة، لا تستخدم قواعد عامة';rulesBtn.title='تم إيقاف القالب القديم لأنه يفتح قراءة وكتابة الطلبات للجميع.';}
 
     // Master Broadcast Button
     const bcastBtn = container.querySelector('#btn-master-cloud-broadcast-all');
@@ -24726,19 +24471,8 @@ class LusterOwnerDashboard {
   renderRewardsCenterTab(container) {
     if (!container) return;
     const state = this.store.getState() || {};
-    const loyalty = state.loyalty || {
-      enabled: true,
-      pointValueEGP: 0.1,
-      earnRatePer100EGP: 5,
-      firstOrderBonus: 50,
-      minOrderToEarn: 100,
-      maxRedeemPercent: 20,
-      pointsExpiryDays: 90,
-      dailyEarnCap: 200,
-      budget: { daily: 500, monthly: 15000, campaign: 5000, usedToday: 45, usedMonth: 1250 },
-      awardedOrderIds: []
-    };
-    if (!loyalty.budget) loyalty.budget = { daily: 500, monthly: 15000, campaign: 5000, usedToday: 45, usedMonth: 1250 };
+    const loyalty = state.loyalty || {enabled:false,pointValueEGP:0,earnRatePer100EGP:0,firstOrderBonus:0,minOrderToEarn:0,maxRedeemPercent:0,pointsExpiryDays:0,dailyEarnCap:0,budget:{daily:0,monthly:0,campaign:0,usedToday:0,usedMonth:0},awardedOrderIds:[]};
+    if(!loyalty.budget)loyalty.budget={daily:0,monthly:0,campaign:0,usedToday:0,usedMonth:0};
 
     const remainingDaily = Math.max(0, loyalty.budget.daily - (loyalty.budget.usedToday || 0));
     const remainingMonthly = Math.max(0, loyalty.budget.monthly - (loyalty.budget.usedMonth || 0));
@@ -24747,6 +24481,7 @@ class LusterOwnerDashboard {
 
     container.innerHTML = `
       <div style="display:flex; flex-direction:column; gap:16px;">
+        <p role="status" style="padding:12px;border:1px solid #fbbf24;border-radius:9px;color:#fde68a;font-size:12px;line-height:1.8;">أُزيلت الأرصدة الافتراضية. الاكتساب والاستبدال والتعديل اليدوي متوقفة حتى ربط سجل عميل موثّق والتحقق من شروط المالك. إعداد القواعد هنا لا يضيف أو يخصم نقاطًا حاليًا. السجلات المحلية القديمة غير الموثّقة محفوظة للمراجعة، ولا تعتبر رصيدًا متاحًا.</p>
         <!-- Header -->
         <div style="background:var(--bg-secondary); border:1.5px solid var(--accent-gold); border-radius:var(--radius-md); padding:16px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
           <div>
@@ -24754,13 +24489,13 @@ class LusterOwnerDashboard {
               <span>🎛️</span> مركز إدارة المكافآت والميزانية (Reward & Budget Command Center)
             </div>
             <div style="font-size:12px; color:var(--text-muted); margin-top:4px;">
-              تحكم كامل في تشغيل النقاط، قواعد الاكتساب، ميزانية الخصومات، ومنع التكرار نهائياً.
+              إعداد شروط المالك وقواعد الاكتساب والميزانية. التنفيذ والتعديل متوقفان حتى التحقق من سجل العميل.
             </div>
           </div>
           <div style="display:flex; align-items:center; gap:8px;">
             <label style="font-size:12px; font-weight:800; color:#FFF; display:flex; align-items:center; gap:6px; cursor:pointer;">
-              <input type="checkbox" id="chk-loyalty-toggle" ${loyalty.enabled !== false ? 'checked' : ''} style="width:18px; height:18px; accent-color:var(--accent-gold);">
-              <span>برنامج النقاط ${loyalty.enabled !== false ? 'مفعّل 🟢' : 'معطّل 🔴'}</span>
+              <input type="checkbox" id="chk-loyalty-toggle" ${loyalty.enabled === true ? 'checked' : ''} style="width:18px; height:18px; accent-color:var(--accent-gold);">
+              <span>برنامج النقاط ${loyalty.enabled === true ? 'مطلوب تفعيله بعد التحقق' : 'معطّل'}</span>
             </label>
           </div>
         </div>
@@ -24786,7 +24521,7 @@ class LusterOwnerDashboard {
             </div>
             <div style="background:var(--bg-secondary); padding:10px 14px; border-radius:var(--radius-sm); border:1px solid rgba(255,255,255,0.06);">
               <div style="font-size:11px; color:var(--text-muted);">حالة أمان الميزانية:</div>
-              <div style="font-size:14px; font-weight:900; color:#50C878; margin-top:4px;">✓ تحت السيطرة الآمنة</div>
+              <div style="font-size:14px; font-weight:900; color:#50C878; margin-top:4px;">بانتظار التحقق من سجل المعاملات</div>
               <div style="font-size:10px; color:var(--text-muted);">سقف الصرف مفعل</div>
             </div>
           </div>
@@ -24798,36 +24533,36 @@ class LusterOwnerDashboard {
           <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:12px; margin-bottom:14px;">
             <div>
               <label style="font-size:11px; color:var(--text-muted); display:block; margin-bottom:4px;">نقاط لكل 100 ج.م مشتريات مؤكدة</label>
-              <input type="number" id="cfg-earn-rate" value="${loyalty.earnRatePer100EGP || 5}" min="1" max="50" style="width:100%; background:var(--bg-card); color:#FFF; border:1px solid rgba(255,255,255,0.15); padding:8px 12px; border-radius:var(--radius-sm); font-size:12px; font-weight:800;">
+              <input type="number" id="cfg-earn-rate" value="${loyalty.earnRatePer100EGP ?? 0}" min="0" style="width:100%; background:var(--bg-card); color:#FFF; border:1px solid rgba(255,255,255,0.15); padding:8px 12px; border-radius:var(--radius-sm); font-size:12px; font-weight:800;">
             </div>
             <div>
               <label style="font-size:11px; color:var(--text-muted); display:block; margin-bottom:4px;">قيمة النقطة بالجنيه (مثال: 0.1 = 10 قروش)</label>
-              <input type="number" step="0.01" id="cfg-point-val" value="${loyalty.pointValueEGP || 0.1}" min="0.01" max="1" style="width:100%; background:var(--bg-card); color:#FFF; border:1px solid rgba(255,255,255,0.15); padding:8px 12px; border-radius:var(--radius-sm); font-size:12px; font-weight:800;">
+              <input type="number" step="0.01" id="cfg-point-val" value="${loyalty.pointValueEGP ?? 0}" min="0" style="width:100%; background:var(--bg-card); color:#FFF; border:1px solid rgba(255,255,255,0.15); padding:8px 12px; border-radius:var(--radius-sm); font-size:12px; font-weight:800;">
             </div>
             <div>
               <label style="font-size:11px; color:var(--text-muted); display:block; margin-bottom:4px;">نقاط هدية ترحيبية للعميل الجديد</label>
-              <input type="number" id="cfg-first-bonus" value="${loyalty.firstOrderBonus || 50}" min="0" max="500" style="width:100%; background:var(--bg-card); color:#FFF; border:1px solid rgba(255,255,255,0.15); padding:8px 12px; border-radius:var(--radius-sm); font-size:12px; font-weight:800;">
+              <input type="number" id="cfg-first-bonus" value="${loyalty.firstOrderBonus ?? 0}" min="0" style="width:100%; background:var(--bg-card); color:#FFF; border:1px solid rgba(255,255,255,0.15); padding:8px 12px; border-radius:var(--radius-sm); font-size:12px; font-weight:800;">
             </div>
             <div>
-              <label style="font-size:11px; color:var(--text-muted); display:block; margin-bottom:4px;">الحد الأدنى للطلب لتفعيل خصم النقاط (ج.م)</label>
-              <input type="number" id="cfg-min-order" value="${loyalty.minOrderToEarn || 100}" min="50" max="1000" style="width:100%; background:var(--bg-card); color:#FFF; border:1px solid rgba(255,255,255,0.15); padding:8px 12px; border-radius:var(--radius-sm); font-size:12px; font-weight:800;">
+              <label style="font-size:11px; color:var(--text-muted); display:block; margin-bottom:4px;">الحد الأدنى للطلب لاكتساب النقاط (ج.م)</label>
+              <input type="number" id="cfg-min-order" value="${loyalty.minOrderToEarn ?? 0}" min="0" style="width:100%; background:var(--bg-card); color:#FFF; border:1px solid rgba(255,255,255,0.15); padding:8px 12px; border-radius:var(--radius-sm); font-size:12px; font-weight:800;">
             </div>
             <div>
               <label style="font-size:11px; color:var(--text-muted); display:block; margin-bottom:4px;">سقف الخصم الأقصى بالنقاط من الفاتورة (%)</label>
-              <input type="number" id="cfg-max-redeem" value="${loyalty.maxRedeemPercent || 20}" min="5" max="50" style="width:100%; background:var(--bg-card); color:#FFF; border:1px solid rgba(255,255,255,0.15); padding:8px 12px; border-radius:var(--radius-sm); font-size:12px; font-weight:800;">
+              <input type="number" id="cfg-max-redeem" value="${loyalty.maxRedeemPercent ?? 0}" min="0" style="width:100%; background:var(--bg-card); color:#FFF; border:1px solid rgba(255,255,255,0.15); padding:8px 12px; border-radius:var(--radius-sm); font-size:12px; font-weight:800;">
             </div>
             <div>
               <label style="font-size:11px; color:var(--text-muted); display:block; margin-bottom:4px;">صلاحية النقاط (أيام)</label>
-              <input type="number" id="cfg-expiry-days" value="${loyalty.pointsExpiryDays || 90}" min="15" max="365" style="width:100%; background:var(--bg-card); color:#FFF; border:1px solid rgba(255,255,255,0.15); padding:8px 12px; border-radius:var(--radius-sm); font-size:12px; font-weight:800;">
+              <input type="number" id="cfg-expiry-days" value="${loyalty.pointsExpiryDays ?? 0}" min="0" style="width:100%; background:var(--bg-card); color:#FFF; border:1px solid rgba(255,255,255,0.15); padding:8px 12px; border-radius:var(--radius-sm); font-size:12px; font-weight:800;">
             </div>
           </div>
 
           <div style="background:rgba(80,200,120,0.08); border:1px solid rgba(80,200,120,0.25); border-radius:var(--radius-sm); padding:10px 14px; margin-bottom:14px; font-size:11px; color:#A7F3D0; line-height:1.6;">
-            🛡️ <strong>آلية منع التكرار الفولاذية (Anti-Duplication Guard):</strong> مفعلة تلقائياً برمجياً عبر الـ Idempotency Key لكل طلب، ويستحيل احتساب نقاط مرتين للعملية الواحدة مع استبعاد الطلبات الملغاة كلياً.
+            <strong>حالة التنفيذ:</strong> الاستحقاق والخصم ومنع التكرار على مستوى حساب العميل لم تُتحقق بعد. لا تُصرف نقاط قبل تفعيل سجل معاملات موثّق.
           </div>
 
           <button id="btn-save-loyalty-rules" class="btn-luxury-gold" style="padding:10px 24px; font-size:13px; font-weight:900;">
-            💾 حفظ واعتماد قواعد المكافآت فوراً
+            حفظ إعدادات القواعد على هذا الجهاز
           </button>
         </div>
 
@@ -24869,45 +24604,23 @@ class LusterOwnerDashboard {
     if (saveRulesBtn) {
       saveRulesBtn.onclick = async () => {
         loyalty.enabled = container.querySelector('#chk-loyalty-toggle').checked;
-        loyalty.earnRatePer100EGP = Number(container.querySelector('#cfg-earn-rate').value) || 5;
-        loyalty.pointValueEGP = Number(container.querySelector('#cfg-point-val').value) || 0.1;
-        loyalty.firstOrderBonus = Number(container.querySelector('#cfg-first-bonus').value) || 50;
-        loyalty.minOrderToEarn = Number(container.querySelector('#cfg-min-order').value) || 100;
-        loyalty.maxRedeemPercent = Number(container.querySelector('#cfg-max-redeem').value) || 20;
-        loyalty.pointsExpiryDays = Number(container.querySelector('#cfg-expiry-days').value) || 90;
+        loyalty.earnRatePer100EGP = Math.max(0,Number(container.querySelector('#cfg-earn-rate').value)||0);
+        loyalty.pointValueEGP = Math.max(0,Number(container.querySelector('#cfg-point-val').value)||0);
+        loyalty.firstOrderBonus = Math.max(0,Number(container.querySelector('#cfg-first-bonus').value)||0);
+        loyalty.minOrderToEarn = Math.max(0,Number(container.querySelector('#cfg-min-order').value)||0);
+        loyalty.maxRedeemPercent = Math.max(0,Number(container.querySelector('#cfg-max-redeem').value)||0);
+        loyalty.pointsExpiryDays = Math.max(0,Number(container.querySelector('#cfg-expiry-days').value)||0);
 
         await this.store.saveSection('loyalty', loyalty, 'تحديث قواعد وميزانية برنامج المكافآت');
         this.addAuditLog('تعديل قواعد المكافآت', `معدل الاكتساب: ${loyalty.earnRatePer100EGP} نقاط لكل 100 ج.م، سقف الخصم: ${loyalty.maxRedeemPercent}%`);
-        window.showToast('✓ تم حفظ واعتماد قواعد وميزانية المكافآت بنجاح!', 'success');
+        window.showToast('حُفظت القواعد على هذا الجهاز. النشر السحابي له حالة منفصلة؛ التنفيذ متوقف حتى ربط سجل العميل الموثّق.', 'info');
         this.renderRewardsCenterTab(container);
       };
     }
 
-    // Bind manual points adjustment
-    const adjBtn = container.querySelector('#btn-submit-points-adj');
-    if (adjBtn) {
-      adjBtn.onclick = () => {
-        const phone = container.querySelector('#sel-adj-customer')?.value;
-        const type = container.querySelector('#sel-adj-type')?.value;
-        const pts = Number(container.querySelector('#input-adj-points')?.value);
-        const reason = container.querySelector('#input-adj-reason')?.value.trim() || 'تعديل يدوي من المالك';
+    const adjBtn=container.querySelector('#btn-submit-points-adj');
+    if(adjBtn){adjBtn.disabled=true;adjBtn.textContent='التعديل متوقف حتى ربط سجل العميل الموثّق';adjBtn.title='لم يتم تعديل رصيد أي عميل أو رصيد هذا المتصفح.';}
 
-        if (!pts || pts <= 0) {
-          window.showToast('يرجى إدخال عدد نقاط صالح', 'error');
-          return;
-        }
-
-        const delta = type === 'add' ? pts : -pts;
-        const currentPoints = this.store.points || { balance: 100 };
-        currentPoints.balance = Math.max(0, (currentPoints.balance || 0) + delta);
-        this.store.saveLocal('luster_points', currentPoints);
-
-        this.addAuditLog(type === 'add' ? 'إضافة نقاط يدوية' : 'خصم نقاط يدوي', `العميل: ${phone} | القيمة: ${delta} نقطة | السبب: ${reason}`);
-        window.showToast(`✓ تم ${type === 'add' ? 'إضافة' : 'خصم'} ${pts} نقطة للعميل بنجاح وتوثيقها في سجل التدقيق!`, 'success');
-        container.querySelector('#input-adj-points').value = '';
-        container.querySelector('#input-adj-reason').value = '';
-      };
-    }
   }
 
   // ==========================================
@@ -25142,7 +24855,7 @@ class LusterOwnerDashboard {
             const items = o.items || [];
             const itemsSummary = items.map(it => `${it.titleAr || it.title} (${it.quantity || 1})`).join('، ') || 'منتجات مخصصة';
             const dateFormatted = o.createdAt ? new Date(o.createdAt).toLocaleString('ar-EG') : 'تاريخ مسجل';
-            const pointsEarned = o.pointsEarned || Math.round((Number(o.totalAmount) || 0) * 0.05);
+            const pointsEarned = 'بانتظار سجل استحقاق موثّق';
 
             return `
               <div style="background:#13131A; border:1px solid rgba(255,255,255,0.08); border-radius:var(--radius-sm); padding:14px; display:flex; flex-direction:column; gap:10px;">
@@ -25167,7 +24880,7 @@ class LusterOwnerDashboard {
                 <!-- Order Details & Products -->
                 <div style="background:var(--bg-secondary); padding:10px 12px; border-radius:var(--radius-sm); font-size:11px; color:var(--text-secondary); line-height:1.6;">
                   <div>📦 <strong>الأصناف والكميات:</strong> ${itemsSummary}</div>
-                  <div>🎟️ <strong>الكوبون المستخدم:</strong> ${o.couponCode || 'بدون كوبون'} | 💎 <strong>النقاط المكتسبة:</strong> +${pointsEarned} نقطة</div>
+                  <div>🎟️ <strong>الكوبون المستخدم:</strong> ${o.couponCode || 'بدون كوبون'} | 💎 <strong>النقاط المكتسبة:</strong> ${pointsEarned}</div>
                 </div>
 
                 <!-- Manual Delete Protection (المالك فقط بعد تأكيد) -->
@@ -26199,10 +25912,11 @@ class LusterAIChatEngine {
     // -------------------------------------------------------------------------
     // 0. ORDER TRACKING BY ORDER ID OR PHONE NUMBER INSIDE CHAT
     // -------------------------------------------------------------------------
-    const orderIdMatch = rawQ.match(/LUST-\d+|ORD-\d+/i);
+    const orderIdMatch = rawQ.match(/(?:LUST|ORD)-[a-z0-9_-]+/i);
     const phoneMatch = rawQ.replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).match(/01[0125]\d{8}/);
     if (orderIdMatch || phoneMatch || q.includes('تتبع طلبي') || q.includes('طلبي فين') || q.includes('حاله الطلب') || q.includes('وصل فين')) {
-      const allOrders = (window.lusterCloudBridge && window.lusterCloudBridge.orders) || JSON.parse(localStorage.getItem('luster_orders') || '[]');
+      const deviceIds=lusterDeviceOrderIds();
+      const allOrders = ((window.lusterCloudBridge && window.lusterCloudBridge.orders) || JSON.parse(localStorage.getItem('luster_orders') || '[]')).filter(order=>deviceIds.has(order.orderId));
       let foundOrders = [];
       if (orderIdMatch) {
         const targetId = orderIdMatch[0].toUpperCase();
@@ -26230,7 +25944,7 @@ ${ord.courierName ? `<br>• <strong>مندوب التوصيل:</strong> ${this.
 <br><br>
 تقدري كمان تضغطي على أيقونة <strong>«📦 طلباتي»</strong> في الشريط السفلي لمتابعة خط سير الشحنة لحظة بلحظة!`;
       } else {
-        replyText = `أهلاً بحضرتك يا فندم 🌸 لمتابعة حالة طلبك فوراً هنا في الشات، اكتبي لي <strong>رقم الموبايل</strong> اللي سجلتي بيه الطلب أو <strong>كود الطلب (مثل LUST-123456)</strong> وهطلعلك حالته حالاً!`;
+        replyText = `أهلاً بحضرتك يا فندم 🌸 يعرض الشات فقط الطلبات المرتبطة بهذا المتصفح. رقم الهاتف وحده لا يتيح الوصول إلى طلبات شخص آخر. يمكنك مراجعة <strong>طلباتي</strong> أو التواصل مع المتجر برقم طلبك.`;
       }
       followUpChips = [
         { label: '📞 تواصل مع خدمة العملاء', q: 'أرقام التواصل وخدمة العملاء' },
@@ -28461,14 +28175,8 @@ if (typeof window !== 'undefined') {
       }
     }
 
-    if (pointsDiscountEGP > 0 && storeInstance.points) {
-      const pointValue = Number(state?.loyalty?.pointValueEGP) || 0.1;
-      const ptsUsed = Math.round(pointsDiscountEGP / pointValue);
-      storeInstance.points.balance = Math.max(0, (Number(storeInstance.points.balance) || 0) - ptsUsed);
-      storeInstance.points.spent = (Number(storeInstance.points.spent) || 0) + ptsUsed;
-      storeInstance.usePointsInCart = false;
-      storeInstance.saveLocal('luster_points', storeInstance.points);
-    }
+    // Points are not debited here. Redemption is blocked until a trusted atomic ledger exists.
+
   };
 
   // ============================================================================
@@ -28517,6 +28225,10 @@ if (typeof window !== 'undefined') {
         ...(JSON.parse(localStorage.getItem('luster_orders') || '[]'))
       ];
       order = allOrders.find(o => o && o.orderId === orderOrId);
+    }
+    const isOwner=window.lusterCloudBridge?.auth?.currentUser?.uid==='UImYxitPLoVnAuJla2wfC2Apids2';
+    if(order && !isOwner && !lusterDeviceOrderIds().has(order.orderId)){
+      window.showToast('هذه الفاتورة غير مرتبطة بسجل هذا الجهاز.', 'error');return;
     }
     if (!order) {
       window.showToast('لم يتم العثور على بيانات الفاتورة', 'error');
