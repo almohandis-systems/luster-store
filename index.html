@@ -17994,6 +17994,12 @@ class LusterOwnerDashboard {
     }
   }
 
+  returnToStorefront() {
+    // Close only the dashboard UI. Keep owner auth, order alerts and unsaved DOM intact.
+    document.getElementById('luster-owner-dashboard-modal')?.classList.remove('active');
+    document.querySelector('.luster-brand-logo')?.focus({preventScroll:true});
+  }
+
   renderDashboardModal() {
     let modal = document.getElementById('luster-owner-dashboard-modal');
     if (!modal) {
@@ -18002,6 +18008,10 @@ class LusterOwnerDashboard {
       modal.className = 'luster-drawer-overlay';
       modal.innerHTML = `
         <div class="luster-drawer" style="max-width: 980px; width: 96%; max-height: 94dvh; max-height: 94vh; height: 94vh; display: flex; flex-direction: column; overflow: hidden;">
+          <nav aria-label="الرجوع إلى المتجر" style="flex-shrink:0;padding:10px 12px;background:#09090e;border-bottom:1px solid #d4af37;">
+            <button type="button" id="btn-owner-return-storefront" style="display:block!important;visibility:visible!important;width:100%;min-height:46px;padding:11px 14px;border:1px solid #f5df91;border-radius:10px;background:linear-gradient(135deg,#f5df91,#d4af37);color:#111;font-size:16px;font-weight:900;cursor:pointer;">الرجوع للمتجر</button>
+            <div style="font-size:11px;color:#e2e8f0;text-align:center;margin-top:5px;">بدون تسجيل خروج من حساب المالك</div>
+          </nav>
           <div class="drawer-header" style="border-bottom: 2px solid var(--accent-gold); padding: 8px 12px; height: auto; min-height: 50px; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; background: var(--bg-secondary);">
             <div style="display: flex; align-items: center; gap: 8px;">
               <span style="font-size: 20px; line-height: 1;">👑</span>
@@ -18118,13 +18128,12 @@ class LusterOwnerDashboard {
       `;
       document.body.appendChild(modal);
 
-      modal.querySelector('.drawer-close').onclick = () => {
-        this.isAuthenticated = false;
-        sessionStorage.removeItem('luster_owner_authenticated');
-        modal.classList.remove('active');
-        this.alarmEngine.stopAlarm();
-        this.alarmEngine.removeEmergencyBanner();
-      };
+      modal.querySelector('#btn-owner-return-storefront').onclick = () => this.returnToStorefront();
+      const closeButton=modal.querySelector('.drawer-close');
+      closeButton.type='button';
+      closeButton.title='الرجوع للمتجر بدون تسجيل خروج';
+      closeButton.setAttribute('aria-label','الرجوع للمتجر بدون تسجيل خروج');
+      closeButton.onclick = () => this.returnToStorefront();
 
       modal.querySelector('#btn-owner-suite-lock').onclick = () => {
         this.isAuthenticated = false;
