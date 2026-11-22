@@ -25819,23 +25819,33 @@ class LusterAIChatEngine {
   }
 
   startSupportListener() {
-    if (this._supportEs) return;
-    try {
-      const es = new EventSource(`https://ntfy.sh/${this.supportOutTopic}/sse`);
-      this._supportEs = es;
-      es.onmessage = (ev) => {
-        try {
-          const env = JSON.parse(ev.data);
-          if (!env || env.event !== 'message' || !env.message) return;
-          const payload = JSON.parse(env.message);
-          if (!payload || payload.session !== this.supportSessionId || !payload.text) return;
-          const msgTs = Number(payload.ts) || 0;
-          if (msgTs && msgTs <= (this._lastSupportTs || 0)) return;
-          this._lastSupportTs = msgTs;
-          this.appendSupportReply(String(payload.text).slice(0, 3500));
-        } catch(e) {}
-      };
-    } catch(e) {}
+    if (this._supportPoll) return;
+    // Poll the support topic (more reliable than SSE on mobile networks); replies are rare
+    this._supportPoll = true;
+    this._lastSupportTs = Date.now() - 3600000;
+    const poll = async () => {
+      try {
+        const res = await fetch(`https://ntfy.sh/${this.supportOutTopic}/json?poll=1&since=2m`);
+        if (res && res.ok) {
+          const textData = await res.text();
+          for (const line of textData.trim().split('\n')) {
+            if (!line.trim()) continue;
+            try {
+              const env = JSON.parse(line);
+              if (!env || env.event !== 'message' || !env.message) continue;
+              const payload = JSON.parse(env.message);
+              if (!payload || payload.session !== this.supportSessionId || !payload.text) continue;
+              const msgTs = Number(payload.ts) || (env.time * 1000) || 0;
+              if (msgTs && msgTs <= (this._lastSupportTs || 0)) continue;
+              this._lastSupportTs = msgTs;
+              this.appendSupportReply(String(payload.text).slice(0, 3500));
+            } catch(e) {}
+          }
+        }
+      } catch(e) {}
+      setTimeout(poll, 25000);
+    };
+    setTimeout(poll, 4000);
   }
 
   appendSupportReply(text) {
