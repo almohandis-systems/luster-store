@@ -3323,7 +3323,7 @@ body.studio-mode #luster-chat-fab,
         </div>
       </div>
       <div class="product-body">
-        <h3 class="product-title">مسحوق غسيل أوتوماتيك مركز سوبر باور (5 كجم)</h3>
+        <h3 class="product-title">بودرة تبييض الملابس أكتيف أكسجين من لاستر</h3>
         <div class="product-meta">
           <span class="product-price">380 ج.م</span>
           <span class="product-price-old">450 ج.م</span>
@@ -8729,7 +8729,7 @@ const DEFAULT_LUSTER_STATE = {
       "durationSec": 0
     },
     "product_video_prod_1": {
-      "titleAr": "مسحوق غسيل أوتوماتيك مركز سوبر باور (5 كجم)",
+      "titleAr": "بودرة تبييض الملابس أكتيف أكسجين من لاستر",
       "url": "",
       "productId": "prod_1",
       "fileSize": 13792454,
@@ -26014,6 +26014,35 @@ class LusterAIChatEngine {
     });
 
     // -------------------------------------------------------------------------
+    // LIVE-CATALOG ANSWERS (owner request 22 Nov 2026): product/price/availability
+    // questions are answered straight from the in-app catalog, before canned topics.
+    // -------------------------------------------------------------------------
+    let earlyAnswered = false;
+    {
+      const chatStop = ['عندك','عندكم','بكام','سعر','اسعار','ثمن','عامل','كام','فيه','لو','من','فى','في','علي','على','هل','متوفر','موجود','ايه','اي','ده','دي','بتاع','بتاعت','عايز','عايزه','محتاج','محتاجه','عاوز','عاوزه','و'];
+      const qWords = q.split(' ').filter(w => w.length > 2 && !chatStop.includes(w));
+      const liveMatches = qWords.length ? allProducts.filter(p => {
+        const txt = getProdText(p);
+        return qWords.some(w => txt.includes(w));
+      }).slice(0, 4) : [];
+      const asksCatalog = ['بكام','سعر','اسعار','ثمن','عامل','كام','عندك','عندكم','متوفر','موجود','عايز','عاوز','محتاج'].some(t => q.includes(t));
+      if (liveMatches.length > 0 && asksCatalog) {
+        const seenIds = new Set();
+        const uniq = [...directMatchedProducts, ...liveMatches].filter(p => p && !seenIds.has(p.id) && seenIds.add(p.id)).slice(0, 4);
+        matchedProducts = uniq;
+        this.lastProduct = uniq[0];
+        replyText = `أيوه متوفرة عندنا الحمد لله 🌟 دي التفاصيل والأسعار الحالية من كتالوج لاستر:`;
+        followUpChips = [
+          { label: '📋 كل المنتجات والأسعار', q: 'اعرضي لي كل المنتجات والأسعار الحالية' },
+          { label: '🚚 طرق الدفع والتوصيل', q: 'طرق الدفع والتوصيل' }
+        ];
+        earlyAnswered = true;
+      }
+    }
+
+    if (!earlyAnswered) {
+
+    // -------------------------------------------------------------------------
     // 0. ORDER TRACKING BY ORDER ID OR PHONE NUMBER INSIDE CHAT
     // -------------------------------------------------------------------------
     const orderIdMatch = rawQ.match(/LUST-\d+|ORD-\d+/i);
@@ -26244,7 +26273,7 @@ ${phonesHtml}
       replyText = `لنظافة ولمعان وتعقيم الأرضيات والحمامات بنسبة <strong>99.9%</strong> 🚿🌲:
 <br><br>
 1️⃣ <strong>لتطهير ولمعان السيراميك والرخام والأرضيات:</strong>
-<br>• ضعي غطاءين فقط من <strong>مطهر ومعقم الأرضيات برائحة الصنوبر (5 لتر)</strong> في جردل المسح؛ بيقضي على البكتيريا والحشرات الزاحفة وبيسيب لمعة كريستالية وريحة صنوبر منعشة تدوم في البيت كله.
+<br>• ضعي غطاءين فقط من <strong>مطهر ومعقم الأرضيات المركز من لاستر</strong> في جردل المسح؛ بيقضي على البكتيريا والحشرات الزاحفة وبيسيب لمعة كريستالية وريحة صنوبر منعشة تدوم في البيت كله.
 <br><br>
 2️⃣ <strong>لتبييض الفواصل وقاعدة التواليت والتعقيم العميق:</strong>
 <br>• استخدمي <strong>كلور لاستر المبيض والمعقم عالي التركيز (4 لتر)</strong>؛ يقضي فوراً على الاصفرار والتكلسات الجيرية ويعيد للسيراميك والحوض لونه الأبيض الناصع.`;
@@ -26268,8 +26297,8 @@ ${phonesHtml}
       this.lastTopic = 'laundry';
       replyText = `لغسيل ناصع النظافة، ألوان زاهية كالجديدة، وعطر فرنسي ثابت في الدولاب 🧺💜:
 <br><br>
-• <strong>لإزالة البقع الصعبة والغسيل العائلي الثقيل:</strong> نرشح لكِ <strong>مسحوق غسيل أوتوماتيك مركز سوبر باور (5 كجم)</strong> بتركيبته الألمانية الغنية بالإنزيمات النشطة اللي بتفتت بقع الدهون والصلصة والعرق من أول غسلة وبرغوة محكومة تحافظ على موتور الغسالة.
-<br>• <strong>للملابس الملونة والداكنة والعبايات والأنسجة الحساسة:</strong> استخدمي <strong>جل الغسيل المركز باللافندر الفرنسي (3 لتر)</strong>؛ يذوب فوراً في الماء البارد، لا يترك أي رواسب بودرة على الملابس الغامقة، ويمنحها عطر لافندر يدوم <strong>72 ساعة</strong>!
+• <strong>لإزالة البقع الصعبة والغسيل العائلي الثقيل:</strong> نرشح لكِ <strong>بودرة تبييض الملابس أكتيف أكسجين من لاستر</strong> بتركيبته الألمانية الغنية بالإنزيمات النشطة اللي بتفتت بقع الدهون والصلصة والعرق من أول غسلة وبرغوة محكومة تحافظ على موتور الغسالة.
+<br>• <strong>للملابس الملونة والداكنة والعبايات والأنسجة الحساسة:</strong> استخدمي <strong>منتجات الغسيل المركزة من لاستر</strong>؛ يذوب فوراً في الماء البارد، لا يترك أي رواسب بودرة على الملابس الغامقة، ويمنحها عطر لافندر يدوم <strong>72 ساعة</strong>!
 <br>• <strong>لبياض ناصع للغسيل الأبيض:</strong> أضيفي نصف غطاء من <strong>كلور لاستر المركز</strong> في درج الشطف.`;
       matchedProducts = allProducts.filter(p => {
         const txt = getProdText(p);
@@ -26388,6 +26417,8 @@ ${listSummary}
         { label: '🌸 أقوى معطر مفروشات', q: 'أقوى معطر للمفروشات والجو يدوم طويلاً' },
         { label: '📞 أرقام التواصل والواتساب', q: 'أرقام التواصل وخدمة العملاء' }
       ];
+    }
+
     }
 
     // Append Owner Instructions if configured
