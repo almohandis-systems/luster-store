@@ -3,6 +3,38 @@
 <head>
   <!-- Google Firebase & Cloud Firestore SDK v10 (Non-Blocking Ordered Loader) -->
   <script>
+  (function() {
+    const SALT = 'LUSTER::owner::v1::';
+    const ITER = 10000;
+    const ACCEPTED = [
+      'a1eb3ce38f068d7d95cdb59a2e8688f5890dfcdc02a970d069a90605896844ce',
+      '62402012a43dd12c0c04e2620d899bc86e0a49b5645537ef5838c8f999f54cbf',
+      '1446ebb5682ae0ad6bd3bbbfc531b8e5098665146f6dc87128f3be2c12fad9a4'
+    ];
+    function toHex(buf) { return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join(''); }
+    async function hashCode(code) {
+      let data = new TextEncoder().encode(SALT + String(code));
+      for (let i = 0; i < ITER; i++) { data = await crypto.subtle.digest('SHA-256', data); }
+      return toHex(data);
+    }
+    function hashMatch(h) { return typeof h === 'string' && ACCEPTED.indexOf(h) !== -1; }
+    async function verify(code) { if (code === null || code === undefined) return false; return hashMatch(await hashCode(code)); }
+    async function verifyOwner(code) {
+      if (code === null || code === undefined) return false;
+      const h = await hashCode(code);
+      if (hashMatch(h)) return true;
+      const custom = localStorage.getItem('luster_owner_pin_h');
+      return !!custom && h === custom;
+    }
+    try {
+      const legacy = localStorage.getItem('luster_owner_pin');
+      if (legacy) { hashCode(legacy).then(h => { localStorage.setItem('luster_owner_pin_h', h); localStorage.removeItem('luster_owner_pin'); }); }
+    } catch(e) {}
+    window.__lusterHash = hashCode;
+    window.__lusterHashMatch = hashMatch;
+    window.__lusterVerifyCode = verify;
+    window.__lusterVerifyOwnerPin = verifyOwner;
+  })();
     (function() {
       const fbScripts = [
         "https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js",
@@ -7638,7 +7670,6 @@ const DEFAULT_LUSTER_STATE = {
     "companyName": "ALMOHANDIS -SYSTEMS",
     "companySubAr": "للبرمجيات وإدارة وتطوير المنظومات",
     "phone": "01013376681",
-    "passcode": "0846",
     "superAdminAuthorized": false
   },
   "aiAdvisor": {
@@ -9362,7 +9393,7 @@ class LusterCloudBridge {
     // 12. DEVELOPER PASSCODE SECURITY & RESET
     if (cleanUrl === '/api/reset' && method === 'POST') {
       const body = typeof options.body === 'string' ? JSON.parse(options.body) : (options.body || {});
-      if (body.passcode !== '01013376681' && body.passcode !== '2222' && body.passcode !== '0846') {
+      if (!window.__lusterHashMatch(body.passcode)) {
         return buildRes({ success: false, error: 'رمز غير مصرح' }, 403);
       }
       return buildRes({ success: true, message: 'تم إعادة الضبط بنجاح' });
@@ -12634,7 +12665,7 @@ class LusterStudio {
     this.bindInspectors();
   }
 
-  // Owner Authentication Gate (PIN 0846)
+  // Owner Authentication Gate
   toggleStudioMode(forceState) {
     const isAuth = sessionStorage.getItem('luster_owner_authenticated') === 'true';
     if (!isAuth && forceState !== false) {
@@ -12656,25 +12687,25 @@ class LusterStudio {
   }
 
   getOwnerPin() {
-    return localStorage.getItem('luster_owner_pin') || this.store.getState()?.ownerAuth?.pin || '2222';
+    return null;
   }
 
   setOwnerPin(newPin) {
-    localStorage.setItem('luster_owner_pin', newPin);
-    const state = this.store.getState();
-    if (!state.ownerAuth) state.ownerAuth = {};
-    state.ownerAuth.pin = newPin;
-    this.store.saveSection('ownerAuth', state.ownerAuth, 'تحديث الرمز السري للمالك');
+    try {
+      window.__lusterHash(newPin).then(h => {
+        localStorage.setItem('luster_owner_pin_h', h);
+        localStorage.removeItem('luster_owner_pin');
+      });
+    } catch(e) {}
   }
 
-  promptChangeOwnerPin() {
-    const current = this.getOwnerPin();
+  async promptChangeOwnerPin() {
     const oldEntered = prompt('أدخل الرمز السري الحالي للمالك:');
-    if (oldEntered === current || oldEntered === '2222' || oldEntered === '0846') {
+    if (oldEntered !== null && await window.__lusterVerifyOwnerPin(oldEntered)) {
       const newPin = prompt('أدخل الرمز السري الجديد المكون من 4 أرقام:');
       if (newPin && newPin.trim().length >= 4) {
         this.setOwnerPin(newPin.trim());
-        window.showToast(`تم تغيير رمز المالك بنجاح إلى: ${newPin.trim()} ✦`, 'success');
+        window.showToast('تم تغيير رمز المالك بنجاح ✦', 'success');
       } else if (newPin !== null) {
         window.showToast('الرمز الجديد يجب ألا يقل عن 4 أرقام', 'error');
       }
@@ -12696,7 +12727,7 @@ class LusterStudio {
       <div class="owner-auth-card">
         <div style="font-size:38px; margin-bottom:8px;">🔐</div>
         <h3 style="color:var(--accent-gold); font-size:18px; font-weight:900; margin-bottom:6px;">LUSTER Studio — استوديو المالك</h3>
-        <p style="font-size:12px; color:var(--text-muted); margin-bottom:16px;">هذا القسم مخصص للمالك المصرح به فقط ومحمي بآلية تحقق أمنية. أدخل الرمز السري لمالك المنظومة (الافتراضي: 2222):</p>
+        <p style="font-size:12px; color:var(--text-muted); margin-bottom:16px;">هذا القسم مخصص للمالك المصرح به فقط ومحمي بآلية تحقق أمنية. أدخل الرمز السري لمالك المنظومة :</p>
         <input type="password" id="owner-auth-pin" maxlength="6" class="owner-pin-input" placeholder="••••" autofocus autocomplete="off">
         <div style="display:flex; gap:10px;">
           <button id="btn-owner-auth-submit" class="btn-luxury-gold" style="flex:1; padding:12px; font-size:14px;">تأكيد الدخول ✦</button>
@@ -12711,10 +12742,9 @@ class LusterStudio {
     const cancelBtn = modal.querySelector('#btn-owner-auth-cancel');
     const msgEl = modal.querySelector('#owner-auth-msg');
 
-    const attemptLogin = () => {
+    const attemptLogin = async () => {
       const pin = pinInput.value.trim();
-      const validPin = this.getOwnerPin();
-      if (pin === validPin || pin === '2222' || pin === '0846') {
+      if (await window.__lusterVerifyOwnerPin(pin)) {
         sessionStorage.setItem('luster_owner_authenticated', 'true');
         modal.style.display = 'none';
         window.showToast('تم التحقق بنجاح! مرحبًا بك في استوديو المالك ✦', 'success');
@@ -14324,7 +14354,7 @@ class LusterStudio {
 
 // --- Module: developer.js ---
 // LUSTER Developer Mode & Developer Super Admin
-// Trigger: 5 Clicks on ALMOHANDIS -SYSTEMS -> PIN 0846
+// Trigger: 5 Clicks on ALMOHANDIS -SYSTEMS
 // Complete Developer Console with Direct Operations, Diagnostics, Live Server Sync, State JSON Editor & Automated Test Suite
 class DeveloperSuperAdmin {
   constructor(store, motionEngine) {
@@ -14384,9 +14414,9 @@ class DeveloperSuperAdmin {
     const pinInp = overlay.querySelector('#dev-suite-pin');
     const subBtn = overlay.querySelector('#btn-dev-suite-submit');
     const canBtn = overlay.querySelector('#btn-dev-suite-cancel');
-    const checkDev = () => {
+    const checkDev = async () => {
       const val = (pinInp?.value || '').trim();
-      if (val === '0846') {
+      if (await window.__lusterVerifyCode(val)) {
         this.isAuthorized = true;
         overlay.style.display = 'none';
         window.showToast('✓ مرحبًا بالمهندس في مساحة المطور المركزي', 'success');
@@ -14611,7 +14641,7 @@ class DeveloperSuperAdmin {
             <div>
               <div style="font-size:14px; font-weight:900; color:#EF4444; margin-bottom:6px;">⚠️ إعادة ضبط المصنع الشامل (Factory Reset)</div>
               <div style="font-size:12px; color:var(--text-secondary); line-height:1.5;">
-                إرجاع كافة بيانات المتجر والمنتجات والطلبات والإعدادات إلى النسخة النقية الأولى المعتمدة بالرمز 0846.
+                إرجاع كافة بيانات المتجر والمنتجات والطلبات والإعدادات إلى النسخة النقية الأولى المعتمدة.
               </div>
             </div>
             <button id="btn-dev-action-factory-reset" class="btn-luxury-outline" style="border-color:#EF4444; color:#EF4444; padding:10px; font-size:12px; font-weight:800;">
@@ -14753,13 +14783,14 @@ class DeveloperSuperAdmin {
     const factoryResetBtn = container.querySelector('#btn-dev-action-factory-reset');
     if (factoryResetBtn) {
       factoryResetBtn.onclick = async () => {
-        const code = prompt('تأكيد إعادة ضبط المصنع: أدخل الرمز 0846 للمتابعة:');
-        if (code === '0846') {
+        const code = prompt('تأكيد إعادة ضبط المصنع: أدخل الرمز السري للمتابعة:');
+        const __h = code !== null ? await window.__lusterHash(code) : '';
+        if (window.__lusterHashMatch(__h)) {
           try {
             await fetch('/api/reset', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ passcode: '0846' })
+              body: JSON.stringify({ passcode: __h })
             });
           } catch(e) {}
           localStorage.clear();
@@ -15172,7 +15203,7 @@ class DeveloperSuperAdmin {
 // --- Module: owner-dashboard.js ---
 // LUSTER Master Owner Control Suite — مساحة إدارة المتجر
 // Comprehensive Safe Surgical Master Suite
-// Owner PIN: 2222 (Changeable)
+// Owner PIN gate (changeable)
 // 100% Real Interactive Modules:
 // 1. 20 Luxury Designs Library
 // 2. Advanced Text Motion Control System
@@ -15704,15 +15735,16 @@ class LusterOwnerDashboard {
   }
 
   getOwnerPin() {
-    return localStorage.getItem('luster_owner_pin') || this.store.getState()?.ownerAuth?.pin || '2222';
+    return null;
   }
 
   setOwnerPin(newPin) {
-    localStorage.setItem('luster_owner_pin', newPin);
-    const state = this.store.getState();
-    if (!state.ownerAuth) state.ownerAuth = {};
-    state.ownerAuth.pin = newPin;
-    this.store.saveSection('ownerAuth', state.ownerAuth, 'تحديث الرمز السري للمالك');
+    try {
+      window.__lusterHash(newPin).then(h => {
+        localStorage.setItem('luster_owner_pin_h', h);
+        localStorage.removeItem('luster_owner_pin');
+      });
+    } catch(e) {}
   }
 
   init() {
@@ -15964,11 +15996,10 @@ class LusterOwnerDashboard {
     const cancelBtn = overlay.querySelector('#btn-owner-suite-cancel');
     const msgEl = overlay.querySelector('#owner-suite-msg');
 
-    const verify = () => {
+    const verify = async () => {
       this.alarmEngine.initAudio();
       const pin = pinInput.value.trim();
-      const activePin = this.getOwnerPin();
-      if (pin === activePin || pin === '2222' || pin === '0846') {
+      if (await window.__lusterVerifyOwnerPin(pin)) {
         this.isAuthenticated = true;
         sessionStorage.setItem('luster_owner_authenticated', 'true');
         this.alarmEngine.markAsOwnerDevice(true);
