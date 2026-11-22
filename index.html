@@ -7021,20 +7021,18 @@ const DEFAULT_LUSTER_STATE = {
   "phoneManager": {
     "numbers": [
       {
-        "id": "phone_default_1",
+        "id": "owner_contact_20261122",
         "number": "01099251781",
-        "label": "الرقم الرسمي المعتمد",
+        "label": "رقم لاستر الرسمي",
         "visible": true,
         "purposes": [
           "call",
           "whatsapp",
-          "support",
           "support"
         ],
         "isPrimaryFor": [
           "call",
           "whatsapp",
-          "support",
           "support"
         ]
       }
@@ -7276,20 +7274,20 @@ const DEFAULT_LUSTER_STATE = {
         "id": "vodafoneCash",
         "nameAr": "فودافون كاش (Vodafone Cash)",
         "nameEn": "Vodafone Cash",
-        "enabled": true,
-        "phone": "01013376681",
-        "instructionsAr": "يرجى تحويل المبلغ أو قيمة الحجز إلى محفظة فودافون كاش رقم: 01013376681 وإدخال رقم التحويل أو إرفاق إيصال الدفع.",
-        "instructionsEn": "Transfer amount or deposit to Vodafone Cash: 01013376681 and provide the transaction reference."
+        "enabled": false,
+        "phone": "",
+        "instructionsAr": "بيانات الدفع الإلكتروني قيد التأكيد. المتاح حاليًا الدفع عند الاستلام.",
+        "instructionsEn": "Electronic payment details await verification. Cash on delivery is currently available."
       },
       "instapay": {
         "id": "instapay",
         "nameAr": "إنستاباي (InstaPay)",
         "nameEn": "InstaPay Transfer",
-        "enabled": true,
-        "handle": "luster@instapay",
-        "phone": "01013376681",
-        "instructionsAr": "يرجى التحويل فورًا عبر تطبيق InstaPay للحساب: luster@instapay أو رقم الهاتف 01013376681.",
-        "instructionsEn": "Transfer via InstaPay app to ID: luster@instapay or phone 01013376681."
+        "enabled": false,
+        "handle": "",
+        "phone": "",
+        "instructionsAr": "بيانات الدفع الإلكتروني قيد التأكيد. المتاح حاليًا الدفع عند الاستلام.",
+        "instructionsEn": "Electronic payment details await verification. Cash on delivery is currently available."
       }
     },
     "partialPayment": {
@@ -7556,7 +7554,7 @@ const DEFAULT_LUSTER_STATE = {
       "price": 75,
       "originalPrice": 75,
       "badge": "نتيجة فورية",
-      "descriptionAr": "مبيد لاستر للنمل والصراصير بتركيبة فعالة بتقضي عليهم نهائيًا من أول استخدام. نتيجة فورية في دقايق، بدون رائحة مزعجة، وتركيبة آمنة على الأسرة والحيوانات الأليفة وحمايتها بتدوم فترة أطول.",
+      "descriptionAr": "مبيد منزلي. راجع اسم الحشرة المستهدفة وطريقة الاستخدام والتحذيرات المكتوبة على العبوة قبل الاستعمال. يُحفظ بعيدًا عن الأطفال والحيوانات الأليفة والطعام. لا تخلطه مع منظفات أو مواد أخرى، ولا تفترض أنه مناسب للحساسية أو للأسطح الملامسة للطعام.",
       "costPrice": 0,
       "stock": 100,
       "stockCount": 100,
@@ -7578,7 +7576,7 @@ const DEFAULT_LUSTER_STATE = {
       "price": 75,
       "originalPrice": 75,
       "badge": "",
-      "descriptionAr": "مبيد لاستر للحشرات الطائرة: ذباب وناموس وهاموش. من غير ريحة، آمن على الأطفال ومرضى الحساسية، ومفعوله ممتد لأسابيع. رش على الشبابيك والأبواب وأماكن وقوف الذباب وهتشوف الفرق بنفسك.",
+      "descriptionAr": "مبيد منزلي. راجع اسم الحشرة المستهدفة وطريقة الاستخدام والتحذيرات المكتوبة على العبوة قبل الاستعمال. يُحفظ بعيدًا عن الأطفال والحيوانات الأليفة والطعام. لا تخلطه مع منظفات أو مواد أخرى، ولا تفترض أنه مناسب للحساسية أو للأسطح الملامسة للطعام.",
       "costPrice": 0,
       "stock": 100,
       "stockCount": 100,
@@ -7600,7 +7598,7 @@ const DEFAULT_LUSTER_STATE = {
       "price": 85,
       "originalPrice": 85,
       "badge": "",
-      "descriptionAr": "مبيد لاستر للبق والحشرات الزاحفة، قضاء فعال من أول استخدام ونتايج سريعة بتدوم طويلاً. مناسب للمنزل وغرف النوم والمفروشات، وبيدي حماية قوية من إعادة الإصابة.",
+      "descriptionAr": "مبيد منزلي. راجع اسم الحشرة المستهدفة وطريقة الاستخدام والتحذيرات المكتوبة على العبوة قبل الاستعمال. يُحفظ بعيدًا عن الأطفال والحيوانات الأليفة والطعام. لا تخلطه مع منظفات أو مواد أخرى، ولا تفترض أنه مناسب للحساسية أو للأسطح الملامسة للطعام.",
       "costPrice": 0,
       "stock": 100,
       "stockCount": 100,
@@ -7622,7 +7620,7 @@ const DEFAULT_LUSTER_STATE = {
       "price": 70,
       "originalPrice": 70,
       "badge": "",
-      "descriptionAr": "مبيد لاستر للوزغ بفعالية قوية بتخلصك منه بسرعة وبتمنع رجوعه. آمن على البيت عند الاستخدام الصحيح، وبجودة تركيبات لاستر المعروفة.",
+      "descriptionAr": "مبيد منزلي. راجع اسم الحشرة المستهدفة وطريقة الاستخدام والتحذيرات المكتوبة على العبوة قبل الاستعمال. يُحفظ بعيدًا عن الأطفال والحيوانات الأليفة والطعام. لا تخلطه مع منظفات أو مواد أخرى، ولا تفترض أنه مناسب للحساسية أو للأسطح الملامسة للطعام.",
       "costPrice": 0,
       "stock": 100,
       "stockCount": 100,
@@ -7952,7 +7950,7 @@ const DEFAULT_LUSTER_STATE = {
       "price": 40,
       "originalPrice": 40,
       "badge": "",
-      "descriptionAr": "مبيد لاستر للنمل والصراصير بتركيبة فعالة بتقضي عليهم نهائيًا من أول استخدام. نتيجة فورية في دقايق، بدون رائحة مزعجة، وتركيبة آمنة على الأسرة والحيوانات الأليفة وحمايتها بتدوم فترة أطول. متوفرة الآن بعبوة صغيرة اقتصادية بنفس الجودة.",
+      "descriptionAr": "مبيد منزلي. راجع اسم الحشرة المستهدفة وطريقة الاستخدام والتحذيرات المكتوبة على العبوة قبل الاستعمال. يُحفظ بعيدًا عن الأطفال والحيوانات الأليفة والطعام. لا تخلطه مع منظفات أو مواد أخرى، ولا تفترض أنه مناسب للحساسية أو للأسطح الملامسة للطعام.",
       "costPrice": 0,
       "stock": 100,
       "stockCount": 100,
@@ -7974,7 +7972,7 @@ const DEFAULT_LUSTER_STATE = {
       "price": 40,
       "originalPrice": 40,
       "badge": "",
-      "descriptionAr": "مبيد لاستر للحشرات الطائرة: ذباب وناموس وهاموش. من غير ريحة، آمن على الأطفال ومرضى الحساسية، ومفعوله ممتد لأسابيع. رش على الشبابيك والأبواب وأماكن وقوف الذباب وهتشوف الفرق بنفسك. متوفرة الآن بعبوة صغيرة اقتصادية بنفس الجودة.",
+      "descriptionAr": "مبيد منزلي. راجع اسم الحشرة المستهدفة وطريقة الاستخدام والتحذيرات المكتوبة على العبوة قبل الاستعمال. يُحفظ بعيدًا عن الأطفال والحيوانات الأليفة والطعام. لا تخلطه مع منظفات أو مواد أخرى، ولا تفترض أنه مناسب للحساسية أو للأسطح الملامسة للطعام.",
       "costPrice": 0,
       "stock": 100,
       "stockCount": 100,
@@ -7996,7 +7994,7 @@ const DEFAULT_LUSTER_STATE = {
       "price": 45,
       "originalPrice": 45,
       "badge": "",
-      "descriptionAr": "مبيد لاستر للبق والحشرات الزاحفة، قضاء فعال من أول استخدام ونتايج سريعة بتدوم طويلاً. مناسب للمنزل وغرف النوم والمفروشات، وبيدي حماية قوية من إعادة الإصابة. متوفرة الآن بعبوة صغيرة اقتصادية بنفس الجودة.",
+      "descriptionAr": "مبيد منزلي. راجع اسم الحشرة المستهدفة وطريقة الاستخدام والتحذيرات المكتوبة على العبوة قبل الاستعمال. يُحفظ بعيدًا عن الأطفال والحيوانات الأليفة والطعام. لا تخلطه مع منظفات أو مواد أخرى، ولا تفترض أنه مناسب للحساسية أو للأسطح الملامسة للطعام.",
       "costPrice": 0,
       "stock": 100,
       "stockCount": 100,
@@ -8018,7 +8016,7 @@ const DEFAULT_LUSTER_STATE = {
       "price": 40,
       "originalPrice": 40,
       "badge": "",
-      "descriptionAr": "مبيد لاستر للوزغ بفعالية قوية بتخلصك منه بسرعة وبتمنع رجوعه. آمن على البيت عند الاستخدام الصحيح، وبجودة تركيبات لاستر المعروفة. متوفرة الآن بعبوة صغيرة اقتصادية بنفس الجودة.",
+      "descriptionAr": "مبيد منزلي. راجع اسم الحشرة المستهدفة وطريقة الاستخدام والتحذيرات المكتوبة على العبوة قبل الاستعمال. يُحفظ بعيدًا عن الأطفال والحيوانات الأليفة والطعام. لا تخلطه مع منظفات أو مواد أخرى، ولا تفترض أنه مناسب للحساسية أو للأسطح الملامسة للطعام.",
       "costPrice": 0,
       "stock": 100,
       "stockCount": 100,
@@ -8507,7 +8505,7 @@ const DEFAULT_LUSTER_STATE = {
   "developerInfo": {
     "companyName": "ALMOHANDIS -SYSTEMS",
     "companySubAr": "للبرمجيات وإدارة وتطوير المنظومات",
-    "phone": "01013376681",
+    "phone": "01099251781",
     "superAdminAuthorized": false
   },
   "aiAdvisor": {
@@ -9897,6 +9895,9 @@ class LusterCloudBridge {
     this.startBackgroundSync();
     setTimeout(() => this.flushPendingOrders(), 5000);
     window.addEventListener('online', () => this.flushPendingOrders());
+    this.startOwnerPingWatch();
+    setInterval(()=>this.flushOrderPings(),60000);
+    setTimeout(()=>this.flushOrderPings(),5000);
   }
 
   queueOrder(order) {
@@ -9922,6 +9923,7 @@ class LusterCloudBridge {
           });
           // Stable random order id makes a retry idempotent: never overwrite another order.
           if (response.ok || response.status === 409) {
+            this.queueOrderPing(id);
             const latest = JSON.parse(localStorage.getItem(key) || '{}');
             delete latest[id]; localStorage.setItem(key, JSON.stringify(latest));
             const saved = this.orders.find(o => o.orderId === id);
@@ -9931,6 +9933,68 @@ class LusterCloudBridge {
         } catch(e) {}
       }
     } finally { this._flushingOrders = false; }
+  }
+
+  queueOrderPing(orderId) {
+    try {
+      const key='luster_pending_order_pings_v1';
+      const pending=JSON.parse(localStorage.getItem(key)||'{}');
+      if (!pending[orderId]) pending[orderId]={kind:'order_ping',event:crypto.randomUUID(),ts:Date.now()};
+      localStorage.setItem(key,JSON.stringify(pending));
+      this.flushOrderPings();
+    } catch(e) {}
+  }
+
+  async flushOrderPings() {
+    if (this._sendingPings) return; this._sendingPings=true;
+    try {
+      const key='luster_pending_order_pings_v1';
+      const pending=JSON.parse(localStorage.getItem(key)||'{}');
+      for (const [id,ping] of Object.entries(pending)) {
+        try {
+          const r=await fetch('https://ntfy.sh/luster_order_pings_almohandis_v1',{method:'POST',headers:{'Content-Type':'text/plain; charset=utf-8'},body:JSON.stringify(ping),signal:AbortSignal.timeout(8000)});
+          if (r.ok) { const latest=JSON.parse(localStorage.getItem(key)||'{}');delete latest[id];localStorage.setItem(key,JSON.stringify(latest)); }
+        } catch(e) {}
+      }
+    } finally { this._sendingPings=false; }
+  }
+
+  startOwnerPingWatch() {
+    const check=async()=>{
+      const dashboard=window.lusterApp?.ownerDashboard;
+      const owner=localStorage.getItem('luster_owner_device_verified')==='true' || dashboard?.isAuthenticated;
+      if (!owner || document.visibilityState!=='visible') return;
+      if (!this._ownerPingCursor) this._ownerPingCursor=Number(localStorage.getItem('luster_owner_ping_cursor_v1')) || Date.now();
+      if (!this._ownerPingEs && typeof EventSource!=='undefined') {
+        this._ownerPingEs=new EventSource('https://ntfy.sh/luster_order_pings_almohandis_v1/sse');
+        this._ownerPingEs.onmessage=event=>{try{const env=JSON.parse(event.data);if(env.event==='message')this.receiveOwnerPing(JSON.parse(env.message));}catch(e){}};
+      }
+      try {
+        const since=Math.max(1,Math.floor(this._ownerPingCursor/1000)-1);
+        const res=await fetch('https://ntfy.sh/luster_order_pings_almohandis_v1/json?poll=1&since='+since,{signal:AbortSignal.timeout(8000)});
+        if(res.ok) for(const line of (await res.text()).trim().split('\n')) {
+          if(!line)continue;try{const env=JSON.parse(line);if(env.event==='message')this.receiveOwnerPing(JSON.parse(env.message));}catch(e){}
+        }
+      } catch(e) {}
+      dashboard?.updateAlarmState();
+    };
+    setInterval(check,60000);setTimeout(check,5000);
+    document.addEventListener('visibilitychange',check);
+    document.addEventListener('click',()=>{if(window.lusterApp?.ownerDashboard?.alarmEngine?.isOwnerContext())check();},{once:true});
+  }
+
+  receiveOwnerPing(ping) {
+    // Unauthenticated transport: notification hint only, never an order or catalog record.
+    if(ping?.kind!=='order_ping'||typeof ping.event!=='string'||!/^[-a-z0-9]{36}$/.test(ping.event)||!Number.isFinite(ping.ts))return;
+    if(ping.ts<(this._ownerPingCursor||0)||ping.ts>Date.now()+60000)return;
+    const key='luster_unacked_order_pings_v1';
+    const pending=JSON.parse(localStorage.getItem(key)||'{}');
+    const seen=JSON.parse(localStorage.getItem('luster_seen_order_pings_v1')||'[]');
+    if(seen.includes(ping.event))return;
+    seen.push(ping.event);localStorage.setItem('luster_seen_order_pings_v1',JSON.stringify(seen.slice(-1000)));
+    pending[ping.event]=ping.ts;localStorage.setItem(key,JSON.stringify(pending));
+    this._ownerPingCursor=Math.max(this._ownerPingCursor||0,ping.ts);localStorage.setItem('luster_owner_ping_cursor_v1',String(this._ownerPingCursor));
+    window.lusterApp?.ownerDashboard?.updateAlarmState();
   }
 
   getStoreId() {
@@ -10822,7 +10886,7 @@ class LusterCloudBridge {
           customerId: customerAuthUid,
           createdAt: body.createdAt || new Date().toISOString(),
           items: body.items || [],
-          customer: body.customer || { name: 'عميل فاخر', phone: '01000000000', address: 'مصر' },
+          customer: body.customer || { name: 'عميل فاخر', phone: '', address: 'مصر' },
           notes: body.notes || '',
           totalAmount: total,
           isPartialPayment: isPartial,
@@ -11095,7 +11159,7 @@ class LusterCloudBridge {
 
         const newPhone = {
           id: 'phone_' + Date.now(),
-          number: body.number || '01013376681',
+          number: body.number || '01099251781',
           label: body.label || 'رقم هاتف جديد',
           visible: body.visible !== undefined ? body.visible : true,
           purposes: body.purposes || ['support'],
@@ -11152,7 +11216,7 @@ class LusterCloudBridge {
         if (this.state.phoneManager && Array.isArray(this.state.phoneManager.numbers)) {
           this.state.phoneManager.numbers = this.state.phoneManager.numbers.filter(p => p.id !== targetId);
           const remainingPrimary = this.state.phoneManager.numbers.find(p => p.isPrimaryFor && p.isPrimaryFor.includes('vodafoneCash'));
-          const fallbackPhone = remainingPrimary ? remainingPrimary.number : (this.state.brand?.phone || '01013376681');
+          const fallbackPhone = remainingPrimary ? remainingPrimary.number : (this.state.brand?.phone || '01099251781');
           if (this.state.paymentSettings?.methods?.vodafoneCash) {
             this.state.paymentSettings.methods.vodafoneCash.phone = fallbackPhone;
           }
@@ -11863,8 +11927,14 @@ class LusterStore {
     const other = numbers.map(n => ({...n,
       purposes:(n.purposes || []).filter(p => !['call','whatsapp','support'].includes(p)),
       isPrimaryFor:(n.isPrimaryFor || []).filter(p => !['call','whatsapp','support'].includes(p))
-    })).filter(n => n.purposes.length && !String(n.number).includes('96565704145'));
+    })).filter(n => n.purposes.length && !String(n.number).startsWith('965'));
     state.phoneManager = {numbers:[{id:'owner_contact_20261122',number:'01099251781',label:'رقم لاستر الرسمي',visible:true,purposes:['call','whatsapp','support'],isPrimaryFor:['call','whatsapp','support']}, ...other]};
+    if(state.paymentSettings?.methods) for(const key of ['vodafoneCash','instapay']) {
+      const method=state.paymentSettings.methods[key];
+      if(method){method.enabled=false;method.phone='';method.handle='';method.instructionsAr='بيانات الدفع الإلكتروني قيد التأكيد. المتاح حاليًا الدفع عند الاستلام.';method.instructionsEn='Electronic payment details await verification. Cash on delivery is currently available.';}
+    }
+    if(state.paymentSettings?.methods?.cash)state.paymentSettings.methods.cash.enabled=true;
+    for(const product of state.products || []) if(product.category==='insects') product.descriptionAr="مبيد منزلي. راجع اسم الحشرة المستهدفة وطريقة الاستخدام والتحذيرات المكتوبة على العبوة قبل الاستعمال. يُحفظ بعيدًا عن الأطفال والحيوانات الأليفة والطعام. لا تخلطه مع منظفات أو مواد أخرى، ولا تفترض أنه مناسب للحساسية أو للأسطح الملامسة للطعام.";
     return state;
   }
 
@@ -12843,7 +12913,7 @@ class CommerceEngine {
             </div>
             <div>
               <label for="chk-phone" style="font-size:11px; color:var(--text-muted); display:block; margin-bottom:4px; font-weight:700;">رقم الهاتف المحمول (11 رقم) *</label>
-              <input type="tel" id="chk-phone" name="tel" autocomplete="tel" inputmode="tel" required placeholder="مثال: 01012345678 *" value="${savedCustomer ? savedCustomer.phone : ''}"
+              <input type="tel" id="chk-phone" name="tel" autocomplete="tel" inputmode="tel" required placeholder="مثال:  *" value="${savedCustomer ? savedCustomer.phone : ''}"
                      style="width:100%; padding:12px; background:var(--bg-secondary); border:1px solid var(--border-subtle); color:#FFF; border-radius:var(--radius-sm); font-weight:700; font-size:13px;">
             </div>
             <div>
@@ -15011,7 +15081,7 @@ class LusterStudio {
           <div style="display:flex; flex-direction:column; gap:10px;">
             <div>
               <label style="font-size:12px; font-weight:800; color:var(--text-muted); display:block; margin-bottom:4px;">رقم الهاتف *</label>
-              <input type="tel" id="phone-form-number" placeholder="مثال: 01013376681" dir="ltr"
+              <input type="tel" id="phone-form-number" placeholder="مثال: 01099251781" dir="ltr"
                      style="width:100%; padding:10px 12px; background:var(--bg-card); border:1px solid var(--border-subtle); color:#FFF; border-radius:var(--radius-sm); font-weight:800; font-size:15px;">
             </div>
             <div>
@@ -16532,7 +16602,7 @@ class DeveloperSuperAdmin {
             createdAt: new Date().toISOString(),
             statusCode: 'new',
             status: 'جديد (بانتظار الاستلام 🚨)',
-            customer: { name: 'المستشار شريف الأنصاري', phone: '01015556677', address: 'فيلا 14، حي الياسمين، التجمع الأول، القاهرة' },
+            customer: { name: 'المستشار شريف الأنصاري', phone: '', address: 'فيلا 14، حي الياسمين، التجمع الأول، القاهرة' },
             items: [{ id: 'prod_1', title: 'مسحوق غسيل أوتوماتيك سوبر باور (5 كجم)', price: 380, quantity: 2 }, { id: 'prod_4', title: 'مطهر ومعقم أرضيات برائحة الصنوبر', price: 190, quantity: 1 }],
             totalAmount: 950,
             depositAmount: 190,
@@ -16545,7 +16615,7 @@ class DeveloperSuperAdmin {
             createdAt: new Date(now - 120000).toISOString(),
             statusCode: 'new',
             status: 'جديد (بانتظار الاستلام 🚨)',
-            customer: { name: 'الدكتورة نورهان الجوهري', phone: '01233445566', address: 'برج الأطباء، شارع جامعة الدول، المهندسين، الجيزة' },
+            customer: { name: 'الدكتورة نورهان الجوهري', phone: '', address: 'برج الأطباء، شارع جامعة الدول، المهندسين، الجيزة' },
             items: [{ id: 'prod_2', title: 'جل غسيل ملابس مركز باللافندر الفرنسي (3 لتر)', price: 240, quantity: 2 }],
             totalAmount: 480,
             depositAmount: 480,
@@ -16558,7 +16628,7 @@ class DeveloperSuperAdmin {
             createdAt: new Date(now - 300000).toISOString(),
             statusCode: 'new',
             status: 'جديد (بانتظار الاستلام 🚨)',
-            customer: { name: 'المهندس كريم عبد السميع', phone: '01199887766', address: 'كمبوند بالم هيلز، السادس من أكتوبر' },
+            customer: { name: 'المهندس كريم عبد السميع', phone: '', address: 'كمبوند بالم هيلز، السادس من أكتوبر' },
             items: [{ id: 'prod_6', title: 'معطر جو ومفروشات فندقي فاخر برائحة العود الملكي (1 لتر)', price: 160, quantity: 3 }],
             totalAmount: 480,
             depositAmount: 96,
@@ -16597,14 +16667,14 @@ class DeveloperSuperAdmin {
     if (seedUsersBtn) {
       seedUsersBtn.onclick = () => {
         const couriers = [
-          { id: 'cour_1', name: 'كابتن أحمد سامي عبد الرحمن', phone: '01098765432', vehicle: 'دراجة نارية (موتوسيكل)', status: 'active', activeOrdersCount: 2, zone: 'القاهرة الجديدة ومدينة نصر' },
-          { id: 'cour_2', name: 'كابتن محمود حسن إبراهيم', phone: '01123456789', vehicle: 'سيارة مكيفة سريعة', status: 'available', activeOrdersCount: 0, zone: 'المهندسين والدقي والزمالك' },
-          { id: 'cour_3', name: 'كابتن مصطفى عثمان علي', phone: '01288776655', vehicle: 'سكوتر شحن سريع', status: 'available', activeOrdersCount: 0, zone: 'المعادي والمقطم' }
+          { id: 'cour_1', name: 'كابتن أحمد سامي عبد الرحمن', phone: '', vehicle: 'دراجة نارية (موتوسيكل)', status: 'active', activeOrdersCount: 2, zone: 'القاهرة الجديدة ومدينة نصر' },
+          { id: 'cour_2', name: 'كابتن محمود حسن إبراهيم', phone: '', vehicle: 'سيارة مكيفة سريعة', status: 'available', activeOrdersCount: 0, zone: 'المهندسين والدقي والزمالك' },
+          { id: 'cour_3', name: 'كابتن مصطفى عثمان علي', phone: '', vehicle: 'سكوتر شحن سريع', status: 'available', activeOrdersCount: 0, zone: 'المعادي والمقطم' }
         ];
         const customers = [
-          { id: 'cust_1', name: 'المستشار طارق الزيات', phone: '01011122334', tier: 'VIP الذهبي', totalSpent: 18500, ordersCount: 5, address: 'التجمع الخامس، القاهرة' },
-          { id: 'cust_2', name: 'الدكتورة رانيا عبد العزيز', phone: '01222334455', tier: 'VIP البلاتيني', totalSpent: 34200, ordersCount: 9, address: 'الشيخ زايد، الجيزة' },
-          { id: 'cust_3', name: 'الأستاذ وائل فؤاد المنشاوي', phone: '01155667788', tier: 'VIP الماسي', totalSpent: 52000, ordersCount: 14, address: 'سموحة، الإسكندرية' }
+          { id: 'cust_1', name: 'المستشار طارق الزيات', phone: '', tier: 'VIP الذهبي', totalSpent: 18500, ordersCount: 5, address: 'التجمع الخامس، القاهرة' },
+          { id: 'cust_2', name: 'الدكتورة رانيا عبد العزيز', phone: '', tier: 'VIP البلاتيني', totalSpent: 34200, ordersCount: 9, address: 'الشيخ زايد، الجيزة' },
+          { id: 'cust_3', name: 'الأستاذ وائل فؤاد المنشاوي', phone: '', tier: 'VIP الماسي', totalSpent: 52000, ordersCount: 14, address: 'سموحة، الإسكندرية' }
         ];
 
         localStorage.setItem('luster_couriers', JSON.stringify(couriers));
@@ -17705,17 +17775,19 @@ class LusterOwnerDashboard {
   }
 
   updateAlarmState() {
-    // Non-stop siren that never stops until owner acknowledges orders
-    if (this.pendingNewOrdersCount > 0) {
-      if (this.alarmEngine.isOwnerContext()) {
-        this.alarmEngine.startContinuousAlarm();
+    let pingCount=0;try{pingCount=Object.keys(JSON.parse(localStorage.getItem('luster_unacked_order_pings_v1')||'{}')).length;}catch(e){}
+    const hasNew=this.pendingNewOrdersCount>0 || pingCount>0;
+    if(hasNew && this.alarmEngine.isOwnerContext()) {
+      this.alarmEngine.startContinuousAlarm();
+      if(pingCount>0 && !document.getElementById('luster-generic-order-ping')) {
+        const box=document.createElement('div');box.id='luster-generic-order-ping';
+        box.style.cssText='position:fixed;top:12px;left:12px;right:12px;z-index:2147483647;background:#7f1d1d;color:white;padding:18px;border:2px solid #fde68a;border-radius:12px;font-size:14px;line-height:1.8;text-align:center';
+        box.innerHTML='<strong>🔔 تنبيه طلب جديد</strong><div>هذا تنبيه عام فقط. تفاصيل الطلب قد تتأخر حتى عودة قراءة السحابة. التنبيه ليس تأكيدًا مستقلًا لبيانات الطلب.</div><button type="button" id="luster-ack-generic-ping" style="padding:14px;background:#fde68a;color:#111;border:0;border-radius:8px;font-weight:bold">✓ تم استلام التنبيه، إيقاف الرنين</button>';
+        document.body.appendChild(box);
+        box.querySelector('button').onclick=()=>{localStorage.setItem('luster_unacked_order_pings_v1','{}');box.remove();this.alarmEngine.stopAlarm();if(this.pendingNewOrdersCount>0)this.updateAlarmState();};
       }
       this.updateAlarmBadgeUI(true);
-    } else {
-      // Silenced ONLY when all new orders are acknowledged by owner
-      this.alarmEngine.stopAlarm();
-      this.updateAlarmBadgeUI(false);
-    }
+    } else if(!hasNew) { this.alarmEngine.stopAlarm();document.getElementById('luster-generic-order-ping')?.remove();this.updateAlarmBadgeUI(false); }
   }
 
   updateAlarmBadgeUI(hasNew) {
@@ -18165,6 +18237,8 @@ class LusterOwnerDashboard {
   }
 
   async acknowledgeAllNewOrders() {
+    localStorage.setItem('luster_unacked_order_pings_v1','{}');
+    document.getElementById('luster-generic-order-ping')?.remove();
     this.alarmEngine.stopAlarm();
     try {
       const res = await fetch('/api/orders');
@@ -19421,8 +19495,8 @@ class LusterOwnerDashboard {
 
     if (couriers.length === 0) {
       couriers = [
-        { id: 'cour_1', name: 'كابتن أحمد سامي عبد الرحمن', phone: '01098765432', vehicle: 'دراجة نارية (موتوسيكل)', status: 'active', activeOrdersCount: 1, notes: 'مندوب مميز - منطقة القاهرة الجديدة' },
-        { id: 'cour_2', name: 'كابتن محمود حسن إبراهيم', phone: '01123456789', vehicle: 'سيارة مكيفة سريعة', status: 'available', activeOrdersCount: 0, notes: 'مندوب معتمد - منطقة الجيزة والمهندسين' }
+        { id: 'cour_1', name: 'كابتن أحمد سامي عبد الرحمن', phone: '', vehicle: 'دراجة نارية (موتوسيكل)', status: 'active', activeOrdersCount: 1, notes: 'مندوب مميز - منطقة القاهرة الجديدة' },
+        { id: 'cour_2', name: 'كابتن محمود حسن إبراهيم', phone: '', vehicle: 'سيارة مكيفة سريعة', status: 'available', activeOrdersCount: 0, notes: 'مندوب معتمد - منطقة الجيزة والمهندسين' }
       ];
       try { localStorage.setItem('luster_couriers', JSON.stringify(couriers)); } catch(e){}
     }
@@ -19691,7 +19765,7 @@ class LusterOwnerDashboard {
             </div>
             <div>
               <label style="font-size:11px; color:var(--text-muted); display:block; margin-bottom:4px;">رقم الهاتف المصري *</label>
-              <input type="tel" id="input-cust-phone" placeholder="مثال: 01013376681" dir="ltr" style="width:100%; background:var(--bg-card); color:#FFF; border:1px solid rgba(255,255,255,0.15); padding:8px 12px; border-radius:var(--radius-sm); font-size:12px;">
+              <input type="tel" id="input-cust-phone" placeholder="مثال: 01099251781" dir="ltr" style="width:100%; background:var(--bg-card); color:#FFF; border:1px solid rgba(255,255,255,0.15); padding:8px 12px; border-radius:var(--radius-sm); font-size:12px;">
             </div>
             <div style="grid-column:1 / -1;">
               <label style="font-size:11px; color:var(--text-muted); display:block; margin-bottom:4px;">العنوان التفصيلي ومحل الإقامة *</label>
@@ -20642,7 +20716,7 @@ class LusterOwnerDashboard {
             </div>
             <div>
               <label style="font-size:11px; color:var(--text-muted); display:block; margin-bottom:4px;">الهاتف *</label>
-              <input type="tel" id="input-sup-phone" placeholder="مثال: 01001234567" dir="ltr" style="width:100%; background:var(--bg-card); color:#FFF; border:1px solid rgba(255,255,255,0.15); padding:8px; border-radius:var(--radius-sm); font-size:12px;">
+              <input type="tel" id="input-sup-phone" placeholder="مثال: " dir="ltr" style="width:100%; background:var(--bg-card); color:#FFF; border:1px solid rgba(255,255,255,0.15); padding:8px; border-radius:var(--radius-sm); font-size:12px;">
             </div>
             <div>
               <label style="font-size:11px; color:var(--text-muted); display:block; margin-bottom:4px;">العنوان</label>
@@ -20789,7 +20863,7 @@ class LusterOwnerDashboard {
         const newSup = {
           id: 'sup_' + Date.now(),
           name,
-          phone: phone || '01001234567',
+          phone: phone || '',
           address: address || 'القاهرة',
           totalPurchases: 0,
           paid: 0,
@@ -21576,7 +21650,7 @@ class LusterOwnerDashboard {
           <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:12px;">
             <div>
               <label style="font-size:11px; color:var(--text-muted); display:block; margin-bottom:4px;">رقم الهاتف المحمول (11 رقم) *</label>
-              <input type="tel" id="input-new-phone-num" placeholder="01013376681" dir="ltr" style="width:100%; background:var(--bg-card); color:#FFF; border:1px solid rgba(255,255,255,0.15); padding:8px 12px; border-radius:var(--radius-sm); font-size:13px; font-weight:800;">
+              <input type="tel" id="input-new-phone-num" placeholder="01099251781" dir="ltr" style="width:100%; background:var(--bg-card); color:#FFF; border:1px solid rgba(255,255,255,0.15); padding:8px 12px; border-radius:var(--radius-sm); font-size:13px; font-weight:800;">
             </div>
             <div>
               <label style="font-size:11px; color:var(--text-muted); display:block; margin-bottom:4px;">مسمى / وظيفة الرقم *</label>
@@ -22156,7 +22230,7 @@ class LusterOwnerDashboard {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            customer: { name: 'طلب تجريبي سحابي', phone: '01013376681', address: 'مصر' },
+            customer: { name: 'طلب تجريبي سحابي', phone: '01099251781', address: 'مصر' },
             items: [{ id: 'prod_1', titleAr: 'باقة منظفات ومعطرات لاستر الشاملة', price: 500, quantity: 1 }],
             totalAmount: 12500,
             paymentMethod: 'cod'
@@ -25668,7 +25742,7 @@ class LusterAIChatEngine {
       const notice = document.createElement('div'); notice.id='luster-support-status';
       notice.style.cssText='padding:12px;margin:10px;color:#fff;background:#422006;border-radius:10px;line-height:1.8;font-size:13px';
       notice.innerHTML='الرد الآلي متاح من بيانات المنتجات. استقبال فريق الدعم متأثر حاليًا بعطل خدمة المزامنة. لو عندك طلب أو محتاج رد سريع: <a href="https://wa.me/201099251781" target="_blank" rel="noopener" style="color:#a7f3d0;font-weight:bold">راسل لاستر على واتساب 01099251781</a>';
-      messages.appendChild(notice);
+      messages.prepend(notice);
     }
     window.addEventListener('online',()=>this.flushSupportQueue());
     setTimeout(()=>this.flushSupportQueue(),5000);
@@ -25980,7 +26054,7 @@ class LusterAIChatEngine {
     const categories = state.categories || [];
     const brandName = state.brand?.name || 'LUSTER';
     const primaryPhoneObj = (state.phoneManager?.numbers || []).find(n => n.visible !== false && (n.purposes || []).includes('call'));
-    const brandPhone = primaryPhoneObj?.number || state.brand?.phone || '01013376681';
+    const brandPhone = primaryPhoneObj?.number || state.brand?.phone || '01099251781';
     const vfPhone = state.paymentSettings?.methods?.vodafoneCash?.phone || brandPhone;
     const currency = state.brand?.currency || 'ج.م';
     const depositPct = state.paymentSettings?.partialPayment?.depositPercentage || 20;
@@ -26900,7 +26974,7 @@ window.showOrderSuccessModal = function(order) {
   const state = store.getState();
   const body = modal.querySelector('.drawer-body');
 
-  const primaryPhone = (state.phoneManager?.numbers || []).find(n => n.visible && (n.purposes || []).includes('whatsapp'))?.number || state.brand?.whatsapp || '01013376681';
+  const primaryPhone = (state.phoneManager?.numbers || []).find(n => n.visible && (n.purposes || []).includes('whatsapp'))?.number || state.brand?.whatsapp || '01099251781';
   const cleanPhone = primaryPhone.replace(/\D/g, '');
   const waTarget = cleanPhone.startsWith('0') ? '2' + cleanPhone : cleanPhone;
   const itemsText = (order.items || []).map(i => `${i.titleAr || i.title || 'صنف'} × ${i.quantity || i.qty || 1}`).join('\n• ');
@@ -27834,11 +27908,11 @@ async function runLusterAutomatedTests(log = console.log) {
     // Test 2: Dynamic Phone Management System
     log('\n--- المرحلة 2: اختبار منظومة إدارة أرقام الهاتف الديناميكية ---');
     assert(state.phoneManager && Array.isArray(state.phoneManager.numbers), '5. وجود منظومة إدارة أرقام الهاتف في الحالة العامة (phoneManager)');
-    const defaultPhone = state.phoneManager.numbers.find(p => p.number === '01013376681');
-    assert(defaultPhone && defaultPhone.visible, '6. الرقم الافتراضي المعتمد 01013376681 موجود ومفعل كأول رقم');
-    assert(state.brand.phone === '01013376681', '7. ربط رقم الهاتف العام تلقائيًا بالرقم المعتمد 01013376681');
-    assert(state.paymentSettings.methods.vodafoneCash.phone === '01013376681', '8. ربط محفظة فودافون كاش ديناميكيًا بالرقم 01013376681');
-    assert(state.paymentSettings.methods.instapay.phone === '01013376681', '9. ربط حساب إنستاباي ديناميكيًا بالرقم 01013376681');
+    const defaultPhone = state.phoneManager.numbers.find(p => p.number === '01099251781');
+    assert(defaultPhone && defaultPhone.visible, '6. الرقم الافتراضي المعتمد 01099251781 موجود ومفعل كأول رقم');
+    assert(state.brand.phone === '01099251781', '7. ربط رقم الهاتف العام تلقائيًا بالرقم المعتمد 01099251781');
+    assert(state.paymentSettings.methods.vodafoneCash.phone === '01099251781', '8. ربط محفظة فودافون كاش ديناميكيًا بالرقم 01099251781');
+    assert(state.paymentSettings.methods.instapay.phone === '01099251781', '9. ربط حساب إنستاباي ديناميكيًا بالرقم 01099251781');
 
     // Test 2.1: Add & Edit & Delete Phone Test via API
     log('\n--- المرحلة 2.1: اختبار إضافة وتعديل وحذف رقم هاتف ديناميكي ---');
@@ -27846,7 +27920,7 @@ async function runLusterAutomatedTests(log = console.log) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        number: '01099998888',
+        number: '',
         label: 'رقم تجريبي مؤقت للفحص',
         visible: true,
         purposes: ['vodafoneCash'],
@@ -27854,11 +27928,11 @@ async function runLusterAutomatedTests(log = console.log) {
       })
     });
     const addPhoneData = await addPhoneRes.json();
-    assert(addPhoneData.success && addPhoneData.phone.number === '01099998888', '10. إضافة رقم هاتف جديد بنجاح وتعيينه أساسيًا لفودافون كاش');
+    assert(addPhoneData.success && addPhoneData.phone.number === '', '10. إضافة رقم هاتف جديد بنجاح وتعيينه أساسيًا لفودافون كاش');
 
     // Verify dynamic reflection
     const stateAfterAdd = await (await fetch('/api/state')).json();
-    assert(stateAfterAdd.paymentSettings.methods.vodafoneCash.phone === '01099998888', '11. انعكاس الرقم الجديد تلقائيًا في وسيلة دفع فودافون كاش');
+    assert(stateAfterAdd.paymentSettings.methods.vodafoneCash.phone === '', '11. انعكاس الرقم الجديد تلقائيًا في وسيلة دفع فودافون كاش');
 
     // Delete the test phone
     const delPhoneRes = await fetch('/api/phones', {
@@ -27871,7 +27945,7 @@ async function runLusterAutomatedTests(log = console.log) {
 
     // Verify it disappeared and reverted to approved default phone
     const stateAfterDel = await (await fetch('/api/state')).json();
-    assert(stateAfterDel.paymentSettings.methods.vodafoneCash.phone === '01013376681', '13. عودة فودافون كاش تلقائيًا للرقم المعتمد 01013376681 بعد الحذف');
+    assert(stateAfterDel.paymentSettings.methods.vodafoneCash.phone === '01099251781', '13. عودة فودافون كاش تلقائيًا للرقم المعتمد 01099251781 بعد الحذف');
 
     // Test 3: Granular Section Save & Persistence
     log('\n--- المرحلة 3: اختبار نظام الحفظ المستقل لكل مجموعة (Granular Save) ---');
@@ -27940,7 +28014,7 @@ async function runLusterAutomatedTests(log = console.log) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        customer: { name: 'فحص آلي للنظام', phone: '01013376681', address: 'القاهرة' },
+        customer: { name: 'فحص آلي للنظام', phone: '01099251781', address: 'القاهرة' },
         items: [{ id: 'prod_1', titleAr: 'مسحوق غسيل أوتوماتيك سوبر باور (5 كجم)', price: 4850, quantity: 1 }],
         totalAmount: 4850,
         discountApplied: 0,
@@ -27968,7 +28042,7 @@ async function runLusterAutomatedTests(log = console.log) {
     assert(badResetRes.status === 403, '23. رفض محاولات الدخول أو إعادة الضبط برمز غير مصرح');
 
     const devInfo = state.developerInfo;
-    assert(devInfo.companyName === 'ALMOHANDIS -SYSTEMS' && devInfo.phone === '01013376681', '24. التحقق من ربط هاتف المطور ديناميكيًا بالرقم المعتمد 01013376681');
+    assert(devInfo.companyName === 'ALMOHANDIS -SYSTEMS' && devInfo.phone === '01099251781', '24. التحقق من ربط هاتف المطور ديناميكيًا بالرقم المعتمد 01099251781');
 
     // Summary
     log('\n==================================================');
@@ -28394,7 +28468,7 @@ if (typeof window !== 'undefined') {
 
     const state = (window.lusterApp && window.lusterApp.store && window.lusterApp.store.getState()) || {};
     const currency = state.brand?.currency || 'ج.م';
-    const storePhone = (state.phoneManager?.numbers || []).find(n => n.visible)?.number || state.brand?.phone || '01013376681';
+    const storePhone = (state.phoneManager?.numbers || []).find(n => n.visible)?.number || state.brand?.phone || '01099251781';
     const dateStr = new Date(order.createdAt || Date.now()).toLocaleString('ar-EG', {
       year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
     });
