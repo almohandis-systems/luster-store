@@ -25817,19 +25817,46 @@ class LusterAIChatEngine {
 
   relayToSupportTeam(text) {
     try {
+      const msg = String(text).slice(0, 3500);
       fetch(`https://ntfy.sh/${this.supportInTopic}`, {
         method: 'POST',
-        body: JSON.stringify({ session: this.supportSessionId, text: String(text).slice(0, 3500), ts: Date.now() })
+        body: JSON.stringify({ session: this.supportSessionId, text: msg, ts: Date.now() })
+      }).catch(() => {});
+      // Durable private inbox (Firestore, owner-gated by security rules)
+      fetch('https://firestore.googleapis.com/v1/projects/luster-4a916/databases/(default)/documents/luster_support_in?key=AIzaSyChOCsdmoBwQwrv_2tezDtGJJfC8O6LBU4', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: {
+          session: { stringValue: this.supportSessionId },
+          text: { stringValue: msg },
+          ts: { integerValue: String(Date.now()) }
+        } })
       }).catch(() => {});
     } catch(e) {}
   }
 
   startSupportListener() {
     if (this._supportPoll) return;
-    // Poll the support topic (more reliable than SSE on mobile networks); replies are rare
+    // Poll support replies (durable Firestore doc per session + ntfy interim).
     this._supportPoll = true;
-    this._lastSupportTs = Date.now() - 3600000;
+    try { this._lastSupportTs = Number(localStorage.getItem('luster_support_last_ts_' + this.supportSessionId)) || 0; } catch(e) { this._lastSupportTs = 0; }
     const poll = async () => {
+      // 1. Durable per-session replies doc (survives page closes, no rolling window)
+      try {
+        const fr = await fetch(`https://firestore.googleapis.com/v1/projects/luster-4a916/databases/(default)/documents/luster_support_replies/${this.supportSessionId}?key=AIzaSyChOCsdmoBwQwrv_2tezDtGJJfC8O6LBU4`);
+        if (fr && fr.ok) {
+          const doc = await fr.json();
+          const f = doc.fields || {};
+          const fTxt = f.text && f.text.stringValue;
+          const fTs = Number(f.ts && f.ts.integerValue) || 0;
+          if (fTxt && fTs > (this._lastSupportTs || 0)) {
+            this._lastSupportTs = fTs;
+            try { localStorage.setItem('luster_support_last_ts_' + this.supportSessionId, String(fTs)); } catch(e) {}
+            this.appendSupportReply(String(fTxt).slice(0, 3500));
+          }
+        }
+      } catch(e) {}
+      // 2. Interim ntfy channel (retired after the private relay cutover)
       try {
         const res = await fetch(`https://ntfy.sh/${this.supportOutTopic}/json?poll=1&since=2m`);
         if (res && res.ok) {
@@ -25844,6 +25871,7 @@ class LusterAIChatEngine {
               const msgTs = Number(payload.ts) || (env.time * 1000) || 0;
               if (msgTs && msgTs <= (this._lastSupportTs || 0)) continue;
               this._lastSupportTs = msgTs;
+              try { localStorage.setItem('luster_support_last_ts_' + this.supportSessionId, String(msgTs)); } catch(e) {}
               this.appendSupportReply(String(payload.text).slice(0, 3500));
             } catch(e) {}
           }
