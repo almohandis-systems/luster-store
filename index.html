@@ -10506,6 +10506,7 @@ class LusterCloudBridge {
       let page = '';
       do {
         const res = await fetch(`${baseUrl}/luster_orders${keyParam}&pageSize=100${page ? '&pageToken='+encodeURIComponent(page) : ''}`, {headers:{Authorization:'Bearer '+token},signal:AbortSignal.timeout(8000)});
+        this._lastOrdersReadStatus=res.status;this._lastOrdersReadAt=Date.now();
         if (!res.ok) {this._nextOrdersReadAt=Date.now()+(res.status===429?900000:300000);return;}
         const data = await res.json();
         for (const doc of data.documents || []) {
@@ -17039,26 +17040,16 @@ class OwnerAlarmEngine {
       if (window.BroadcastChannel) {
         this.channel = new BroadcastChannel('luster_orders_sync');
         this.channel.onmessage = (e) => {
-          if (e.data && (e.data.type === 'NEW_ORDER_ALARM' || e.data.type === 'START_ALARM')) {
-            if (this.isOwnerContext()) {
-              this.startContinuousAlarm();
-            }
-          } else if (e.data && e.data.type === 'STOP_ALARM') {
-            this.stopAlarm();
+          if(e.data && (e.data.type==='NEW_ORDER_ALARM' || e.data.type==='START_ALARM')) {
+            this.ownerDashboard?.scheduleOwnerOrdersRefresh();
+          } else if(e.data?.type==='STOP_ALARM') {
+            this.stopAlarm({broadcast:false});
+            this.ownerDashboard?.scheduleOwnerOrdersRefresh();
           }
         };
       }
-      window.addEventListener('storage', (e) => {
-        if (e.key === 'luster_orders' && e.newValue) {
-          try {
-            const ords = JSON.parse(e.newValue);
-            if (ords.some(o => o.statusCode === 'new')) {
-              if (this.isOwnerContext()) {
-                this.startContinuousAlarm();
-              }
-            }
-          } catch(err) {}
-        }
+      window.addEventListener('storage',(e)=>{
+        if(['luster_orders','luster_acknowledged_alarm_orders_v1','luster_alarm_ack_at_v1','luster_unacked_order_pings_v1'].includes(e.key)) this.ownerDashboard?.scheduleOwnerOrdersRefresh();
       });
       document.addEventListener('visibilitychange', () => {
         if (this.isPlaying) {
@@ -17142,16 +17133,10 @@ class OwnerAlarmEngine {
       osc2.start(now);
       osc2.stop(now + 0.35);
 
-      setTimeout(() => {
-        try {
-          osc1.disconnect();
-          gain1.disconnect();
-          osc2.disconnect();
-          gain2.disconnect();
-          masterGain.disconnect();
-          compressor.disconnect();
-        } catch(e) {}
-      }, 400);
+      const burst=[osc1,osc2,gain1,gain2,masterGain,compressor];
+      if(!this._burstGroups)this._burstGroups=new Set();
+      this._burstGroups.add(burst);
+      setTimeout(()=>{for(const node of burst)try{node.disconnect();}catch(e){}this._burstGroups?.delete(burst);},400);
     } catch(e) {
       console.warn('Emergency audio burst error:', e);
     }
@@ -17246,6 +17231,8 @@ class OwnerAlarmEngine {
 
     // 2. Play continuous HTML5 Audio element loop for lockscreen support
     if (this.audioEl) {
+      this.audioEl.muted = false;
+      this.audioEl.loop = true;
       this.audioEl.volume = 1.0;
       this.audioEl.currentTime = 0;
       const playPromise = (typeof this.audioEl.play === 'function') ? this.audioEl.play() : null;
@@ -17262,7 +17249,7 @@ class OwnerAlarmEngine {
             artwork: [{ src: './assets/icon-192.png', sizes: '192x192', type: 'image/png' }]
           });
           navigator.mediaSession.playbackState = 'playing';
-          navigator.mediaSession.setActionHandler('play', () => { if (this.audioEl) this.audioEl.play().catch(()=>{}); });
+          navigator.mediaSession.setActionHandler('play', () => { if (this.isPlaying && this.audioEl) this.audioEl.play().catch(()=>{}); });
           navigator.mediaSession.setActionHandler('pause', () => { this.stopAlarm(); });
           navigator.mediaSession.setActionHandler('stop', () => { this.stopAlarm(); });
         } catch(e) {}
@@ -17301,7 +17288,7 @@ class OwnerAlarmEngine {
     // 5. WakeLock
     if (typeof navigator !== 'undefined' && navigator.wakeLock) {
       navigator.wakeLock.request('screen').then(lock => {
-        this.wakeLock = lock;
+        if(this.isPlaying)this.wakeLock=lock;else lock.release().catch(()=>{});
       }).catch(() => {});
     }
 
@@ -17380,6 +17367,7 @@ class OwnerAlarmEngine {
       if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
         if (navigator.serviceWorker && navigator.serviceWorker.ready) {
           navigator.serviceWorker.ready.then(reg => {
+            if(!this.isPlaying)return;
             reg.showNotification('🚨 طلب جديد في متجر LUSTER!', {
               body: 'وصل طلب جديد من عميل الآن وبانتظار التجهيز والاستلام!',
               icon: './icon-192.png',
@@ -17390,7 +17378,7 @@ class OwnerAlarmEngine {
             }).catch(() => {});
           }).catch(() => {});
         } else {
-          new Notification('🚨 طلب جديد في متجر LUSTER!', {
+          this._nativeOrderNotification = new Notification('🚨 طلب جديد في متجر LUSTER!', {
             body: 'وصل طلب جديد من عميل الآن وبانتظار التجهيز والاستلام!'
           });
         }
@@ -17406,51 +17394,30 @@ class OwnerAlarmEngine {
     }
   }
 
-  stopAlarm() {
-    if (!this.isPlaying && !this.intervalId && !this.vibrateIntervalId) {
-      this.removeEmergencyBanner();
-      return;
+  stopAlarm({broadcast=true}={}) {
+    const hadAlarm=Boolean(this.isPlaying || this.intervalId || this.vibrateIntervalId || this.activeNodes || this._burstGroups?.size || this.audioEl?.paused===false);
+    this.isPlaying=false;
+    if(this.intervalId!=null)clearInterval(this.intervalId);this.intervalId=null;
+    if(this.vibrateIntervalId!=null)clearInterval(this.vibrateIntervalId);this.vibrateIntervalId=null;
+    if(typeof navigator!=='undefined' && navigator.vibrate)try{navigator.vibrate(0);}catch(e){}
+    const nodes=[...Object.values(this.activeNodes||{}),...Array.from(this._burstGroups||[]).flat()];
+    for(const node of nodes) {try{node.stop?.();}catch(e){}try{node.disconnect?.();}catch(e){}}
+    this.activeNodes=null;this._burstGroups?.clear();
+    try{this._nativeOrderNotification?.close();}catch(e){}this._nativeOrderNotification=null;
+    if(this.audioEl) {
+      this.audioEl.muted=true;this.audioEl.volume=0;this.audioEl.loop=false;
+      try {this.audioEl.pause();this.audioEl.currentTime=0;}catch(e){}
     }
-    this.isPlaying = false;
-    if (this.intervalId) {
-      clearInterval(this.intervalId);
-      this.intervalId = null;
+    if(typeof navigator!=='undefined' && 'mediaSession' in navigator) {
+      try {navigator.mediaSession.playbackState='none';}catch(e){}
+      for(const action of ['play','pause','stop'])try{navigator.mediaSession.setActionHandler(action,null);}catch(e){}
     }
-    if (this.vibrateIntervalId) {
-      clearInterval(this.vibrateIntervalId);
-      this.vibrateIntervalId = null;
-    }
-    if (typeof navigator !== 'undefined' && navigator.vibrate) {
-      navigator.vibrate(0);
-    }
-    // Cleanly stop and disconnect continuous Web Audio siren
-    if (this.activeNodes) {
-      try {
-        if (this.activeNodes.osc1) this.activeNodes.osc1.stop();
-        if (this.activeNodes.osc2) this.activeNodes.osc2.stop();
-        if (this.activeNodes.lfo) this.activeNodes.lfo.stop();
-        if (this.activeNodes.gain1) this.activeNodes.gain1.disconnect();
-        if (this.activeNodes.gain2) this.activeNodes.gain2.disconnect();
-        if (this.activeNodes.masterGain) this.activeNodes.masterGain.disconnect();
-        if (this.activeNodes.compressor) this.activeNodes.compressor.disconnect();
-      } catch(e) {}
-      this.activeNodes = null;
-    }
-    if (this.audioEl) {
-      if (typeof this.audioEl.pause === 'function') this.audioEl.pause();
-      this.audioEl.currentTime = 0;
-    }
-    if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
-      try { navigator.mediaSession.playbackState = 'none'; } catch(e) {}
-    }
-    if (this.wakeLock) {
-      this.wakeLock.release().catch(() => {});
-      this.wakeLock = null;
-    }
+    if(this.wakeLock) {try{this.wakeLock.release().catch(()=>{});}catch(e){}this.wakeLock=null;}
     this.removeEmergencyBanner();
-    if (this.channel) {
-      try { this.channel.postMessage({ type: 'STOP_ALARM' }); } catch(e) {}
+    if(hadAlarm && typeof navigator!=='undefined' && navigator.serviceWorker?.getRegistration) {
+      navigator.serviceWorker.getRegistration().then(reg=>reg?.getNotifications({tag:'luster-new-order-alert'})).then(list=>{for(const note of list||[])note.close();}).catch(()=>{});
     }
+    if(hadAlarm && broadcast && this.channel)try{this.channel.postMessage({type:'STOP_ALARM'});}catch(e){}
   }
 
   playRoyalChime() {
@@ -17540,53 +17507,49 @@ class LusterOwnerDashboard {
     }
   }
 
+  getCachedOwnerOrders() {
+    const merged = new Map();
+    for (const order of window.lusterCloudBridge?.orders || []) if(order?.orderId) merged.set(order.orderId, order);
+    try { for(const order of JSON.parse(localStorage.getItem('luster_orders') || '[]')) if(order?.orderId && !merged.has(order.orderId)) merged.set(order.orderId, order); } catch(e) {}
+    return Array.from(merged.values()).sort((a,b)=>new Date(b.createdAt || 0)-new Date(a.createdAt || 0));
+  }
+
+  ownerOrdersFingerprint(orders) {
+    return JSON.stringify(orders)+'|'+(localStorage.getItem('luster_acknowledged_alarm_orders_v1')||'[]')+'|'+(localStorage.getItem('luster_alarm_ack_at_v1')||'0');
+  }
+
+  refreshOwnerOrdersView() {
+    const orders=this.getCachedOwnerOrders();
+    this.pendingNewOrdersCount=orders.filter(o=>this.alarmOrderIsUnacknowledged(o)).length;
+    this.undeliveredOrdersCount=orders.filter(o=>o.statusCode!=='delivered' && o.statusCode!=='cancelled').length;
+    this.updateAlarmState();
+    const modal=document.getElementById('luster-owner-dashboard-modal');
+    const body=modal?.classList.contains('active') && this.activeTab==='orders' ? modal.querySelector('.owner-suite-body') : null;
+    if(body && this.ownerOrdersFingerprint(orders)!==this._lastOrdersRenderFingerprint) this.renderOrdersTab(body);
+    return orders;
+  }
+
+  scheduleOwnerOrdersRefresh() {
+    if(this._ordersViewRefreshTimer!=null) return;
+    this._ordersViewRefreshTimer=setTimeout(()=>{this._ordersViewRefreshTimer=null;this.refreshOwnerOrdersView();},0);
+  }
+
   listenToLiveOrders() {
-    this.store.on('NEW_ORDER_BROADCAST', (payload) => {
-      if(payload?.order && !this.alarmOrderIsUnacknowledged(payload.order))return;
-      this.pendingNewOrdersCount++;
-      this.updateAlarmState();
-      const modal = document.getElementById('luster-owner-dashboard-modal');
-      if (modal && modal.classList.contains('active')) {
-        this.renderTabContent(modal.querySelector('.owner-suite-body'));
-      }
-    });
+    this.store.on('NEW_ORDER_BROADCAST',()=>this.scheduleOwnerOrdersRefresh());
   }
 
   async checkPendingNewOrders() {
-    try {
-      if (window.lusterCloudBridge) {
-        await window.lusterCloudBridge.fetchCloudOrders();
-      }
-      const res = await fetch('/api/orders');
-      if (res && res.ok) {
-        const data = await res.json();
-        const orders = data.orders || [];
-        const newOrders = orders.filter(o => this.alarmOrderIsUnacknowledged(o));
-        const undeliveredOrders = orders.filter(o => o.statusCode !== 'delivered' && o.statusCode !== 'cancelled');
-        this.pendingNewOrdersCount = newOrders.length;
-        this.undeliveredOrdersCount = undeliveredOrders.length;
-        this.updateAlarmState();
-        const modal = document.getElementById('luster-owner-dashboard-modal');
-        if (modal && modal.classList.contains('active') && this.activeTab === 'orders') {
-          const body = modal.querySelector('.owner-suite-body');
-          if (body) {
-            const currentCardCount = body.querySelectorAll('.owner-order-card').length;
-            if (currentCardCount !== orders.length || newOrders.length > 0) {
-              this.renderOrdersTab(body);
-            }
-          }
-        }
-      }
-    } catch (e) {
+    if(this._pendingOrdersCheck) return this._pendingOrdersCheck;
+    this._pendingOrdersCheck=(async()=>{
       try {
-        const local = JSON.parse(localStorage.getItem('luster_orders') || '[]');
-        const newOrders = local.filter(o => this.alarmOrderIsUnacknowledged(o));
-        const undeliveredOrders = local.filter(o => o.statusCode !== 'delivered' && o.statusCode !== 'cancelled');
-        this.pendingNewOrdersCount = newOrders.length;
-        this.undeliveredOrdersCount = undeliveredOrders.length;
-        this.updateAlarmState();
-      } catch (err) {}
-    }
+        if(window.lusterCloudBridge) await window.lusterCloudBridge.fetchCloudOrders();
+        else {
+          const res=await fetch('/api/orders');
+          if(res?.ok) { const data=await res.json();if(Array.isArray(data.orders))localStorage.setItem('luster_orders',JSON.stringify(data.orders)); }
+        }
+      } catch(e) {} finally { this.refreshOwnerOrdersView(); }
+    })();
+    try { return await this._pendingOrdersCheck; } finally { this._pendingOrdersCheck=null; }
   }
 
   updateAlarmState() {
@@ -18092,12 +18055,30 @@ class LusterOwnerDashboard {
   }
 
   alarmOrderIsUnacknowledged(order) {
-    if(order.statusCode!=='new')return false;
-    let ids=[];try{ids=JSON.parse(localStorage.getItem('luster_acknowledged_alarm_orders_v1')||'[]');}catch(e){}
-    if(ids.includes(order.orderId))return false;
+    if(!order || order.statusCode!=='new')return false;
+    const raw=localStorage.getItem('luster_acknowledged_alarm_orders_v1')||'[]';
+    if(raw!==this._alarmAckIdsRaw) {
+      let ids=[];try {ids=JSON.parse(raw);}catch(e){}
+      this._alarmAckIds=new Set(Array.isArray(ids)?ids:[]);this._alarmAckIdsRaw=raw;
+    }
+    if(this._alarmAckIds.has(order.orderId))return false;
     const ackAt=Number(localStorage.getItem('luster_alarm_ack_at_v1')||0);
     const created=Date.parse(order.createdAt||'');
     return !Number.isFinite(created)||created>ackAt;
+  }
+
+  acknowledgeSingleOrderAlert(orderId) {
+    try {
+      const ids=JSON.parse(localStorage.getItem('luster_acknowledged_alarm_orders_v1')||'[]');
+      localStorage.setItem('luster_acknowledged_alarm_orders_v1',JSON.stringify([...new Set([...ids,orderId])]));
+      if(!this.getCachedOwnerOrders().some(o=>this.alarmOrderIsUnacknowledged(o))) {
+        const ackTime=Date.now();localStorage.setItem('luster_unacked_order_pings_v1','{}');
+        localStorage.setItem('luster_alarm_ack_at_v1',String(ackTime));
+        localStorage.setItem('luster_owner_ping_cursor_v1',String(ackTime));
+        if(window.lusterCloudBridge)window.lusterCloudBridge._ownerPingCursor=ackTime;
+      }
+    } catch(e) {}
+    this.refreshOwnerOrdersView();
   }
 
   async acknowledgeAllNewOrders() {
@@ -18110,12 +18091,12 @@ class LusterOwnerDashboard {
     try {
       const orders=[...(window.lusterCloudBridge?.orders||[]),...JSON.parse(localStorage.getItem('luster_orders')||'[]')];
       const ids=JSON.parse(localStorage.getItem('luster_acknowledged_alarm_orders_v1')||'[]');
-      localStorage.setItem('luster_acknowledged_alarm_orders_v1',JSON.stringify([...new Set([...ids,...orders.filter(o=>o.statusCode==='new').map(o=>o.orderId)])].slice(-10000)));
+      localStorage.setItem('luster_acknowledged_alarm_orders_v1',JSON.stringify([...new Set([...ids,...orders.filter(o=>o.statusCode==='new').map(o=>o.orderId)])]));
     } catch(e){}
     document.getElementById('luster-generic-order-ping')?.remove();
     this.pendingNewOrdersCount=0;
     this.alarmEngine.stopAlarm();
-    this.updateAlarmState();
+    this.refreshOwnerOrdersView();
     window.showToast('تم استلام التنبيه وإيقاف الرنين. حالة الطلب لا تتغير إلا من أزرار الطلب نفسه.', 'success');
   }
 
@@ -18163,31 +18144,12 @@ class LusterOwnerDashboard {
 
     let couriers = this.store.getState()?.couriers || JSON.parse(localStorage.getItem('luster_couriers') || '[]');
 
-    // Silent background fetch from central cloud with guaranteed DOM update
-    if (typeof window !== 'undefined' && window.location && window.location.protocol && window.location.protocol.startsWith('http')) {
-      fetch('/api/orders')
-        .then(async (res) => {
-          if (res.ok) {
-            const data = await res.json();
-            if (data && Array.isArray(data.orders)) {
-              const prevOrdersCount = orders.length;
-              const newOrdersList = data.orders;
-              localStorage.setItem('luster_orders', JSON.stringify(newOrdersList));
-              if (this.activeTab === 'orders') {
-                const newCount = newOrdersList.filter(o => o.statusCode === 'new').length;
-                if (newCount !== this.pendingNewOrdersCount || newOrdersList.length !== prevOrdersCount) {
-                  this.pendingNewOrdersCount = newCount;
-                  this.updateAlarmState();
-                  this.renderOrdersTab(container);
-                }
-              }
-            }
-          }
-        }).catch(() => {});
-    }
+    // Pure render: polling and explicit refresh own reads, never recurse from a render.
+    this._lastOrdersRenderFingerprint = this.ownerOrdersFingerprint(orders);
 
     const newOrders = orders.filter(o => this.alarmOrderIsUnacknowledged(o));
     this.pendingNewOrdersCount = newOrders.length;
+    this.undeliveredOrdersCount = orders.filter(o=>o.statusCode!=='delivered' && o.statusCode!=='cancelled').length;
     this.updateAlarmState();
 
     const availableProducts = this.store.getState()?.products || [];
@@ -18422,20 +18384,12 @@ class LusterOwnerDashboard {
     const refBtn = container.querySelector('#btn-refresh-orders');
     if (refBtn) {
       refBtn.onclick = async () => {
-        refBtn.disabled = true;
-        refBtn.innerText = '🔄 جارٍ سحب الطلبات من السحابة...';
+        refBtn.disabled=true;refBtn.innerText='🔄 جارٍ تحديث عرض الطلبات...';
         try {
-          if (window.lusterCloudBridge) {
-            await window.lusterCloudBridge.fetchCloudOrders();
-          }
-          await fetch('/api/orders');
+          await this.checkPendingNewOrders();
           this.renderOrdersTab(container);
-          window.showToast('✓ تم تحديث وسحب كافة الطلبات من السحابة بنجاح!', 'success');
-        } catch(e) {
-          this.renderOrdersTab(container);
-        }
-        refBtn.disabled = false;
-        refBtn.innerText = '🔄 تحديث فوري';
+          window.showToast(window.lusterCloudBridge?._lastOrdersReadStatus===429 ? 'تم عرض الطلبات المحفوظة. قراءة السحابة متوقفة مؤقتًا (429)، لم يتأكد وصول بيانات أحدث.' : 'تم تحديث عرض الطلبات بالنسخة المتاحة.',window.lusterCloudBridge?._lastOrdersReadStatus===429?'warning':'info');
+        } finally { refBtn.disabled=false;refBtn.innerText='🔄 تحديث فوري'; }
       };
     }
 
@@ -18809,7 +18763,8 @@ class LusterOwnerDashboard {
   }
 
   async updateOrderStatus(orderId, statusCode, reason = '') {
-    this.alarmEngine.stopAlarm();
+    // Persist alert acknowledgement before any asynchronous status write or stale read.
+    if(statusCode!=='new')this.acknowledgeSingleOrderAlert(orderId);
     try {
       await fetch('/api/orders/status', {
         method: 'PUT',
