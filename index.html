@@ -10629,7 +10629,7 @@ class LusterCloudBridge {
       const headers = {};
       if (this.auth?.currentUser) headers.Authorization = 'Bearer ' + await this.auth.currentUser.getIdToken();
       const res = await safeCloudFetch(url, {headers});
-      if(collectionName==='luster_store' && ['catalog','catalog_sync'].includes(docId))this._lastCatalogReadStatus=res?.status || 0;
+      if(collectionName==='luster_store' && ['catalog','catalog_sync'].includes(docId)){this._lastCatalogReadStatus=res?.status || 0;window.lusterRenderCatalogPublishNotice?.();}
       if (res && res.ok) {
         const doc = await res.json();
         if (doc && doc.fields && doc.fields.jsonPayload && doc.fields.jsonPayload.stringValue) {
@@ -10682,7 +10682,7 @@ class LusterCloudBridge {
     }
 
     // 2. Guaranteed Multi-Cloud Sync (Offloads media to chunks -> Saves slim <20KB catalog to KVDB + Firestore + ntfy)
-    window.lusterCatalogPublishNotice('التعديل محفوظ على الجهاز. جارٍ التحقق من الكتالوج الحالي قبل النشر لحماية المنتجات الموجودة.');
+    window.lusterCatalogPublishNotice('التعديل محفوظ على الجهاز. جارٍ التحقق من الكتالوج الحالي قبل النشر لحماية المنتجات الموجودة.',false,'checking');
     const publication=await (async () => {
       try {
         const snapshots=await Promise.all([this.firestoreRestGetDoc('luster_store','catalog'),this.firestoreRestGetDoc('luster_store','catalog_sync')]);
@@ -14599,10 +14599,39 @@ class ExperienceEngine {
     };
   };
 
+  window.lusterRenderCatalogPublishNotice=function(){
+    const state=window.lusterCatalogNoticeState;
+    const slot=document.getElementById('owner-catalog-status-slot');
+    let box=document.getElementById('luster-catalog-publish-notice');
+    if(!state){box?.remove();return;}
+    if(!slot){box?.remove();return;}
+    if(state.kind==='owner-login' && window.lusterCloudBridge?.auth?.currentUser?.uid==='UImYxitPLoVnAuJla2wfC2Apids2'){
+      state.message='حساب المالك متصل الآن. التنبيه يخص عملية نشر سابقة لم تتأكد؛ تسجيل الدخول وحده لا يؤكد وصول التعديلات للأجهزة الأخرى.';
+      state.kind='publication';
+    }
+    if(!box || box.tagName!=='DETAILS'){
+      box?.remove();box=document.createElement('details');box.id='luster-catalog-publish-notice';
+      const summary=document.createElement('summary');summary.style.cssText='list-style:none;display:flex;align-items:center;gap:6px;min-height:36px;padding:5px 9px;border:1px solid #fbbf24;border-radius:18px;background:#422006;color:#fde68a;font-size:11px;font-weight:900;cursor:pointer;white-space:nowrap;box-sizing:border-box;';
+      summary.title='اضغط لعرض حالة النشر أو إخفاء التفاصيل';
+      const icon=document.createElement('span');icon.textContent='!';icon.setAttribute('aria-hidden','true');icon.style.cssText='display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;border:1px solid currentColor;';
+      const label=document.createElement('span');label.id='luster-catalog-publish-label';summary.append(icon,label);
+      const panel=document.createElement('div');panel.style.cssText='position:absolute;left:8px;right:8px;top:calc(100% + 4px);z-index:8;background:#422006;color:#fff;border:1px solid #fbbf24;border-radius:10px;padding:12px;max-height:min(45vh,260px);overflow-y:auto;font-size:12px;line-height:1.8;box-shadow:0 8px 24px #0009;';
+      const message=document.createElement('p');message.id='luster-catalog-publish-details';message.setAttribute('role','status');message.setAttribute('aria-live','polite');message.style.margin='0 0 8px';
+      const close=document.createElement('button');close.type='button';close.textContent='إخفاء التفاصيل';close.style.cssText='padding:8px 12px;border:1px solid #fbbf24;border-radius:7px;background:#713f12;color:#fff;font-size:12px;cursor:pointer;';close.onclick=()=>{box.open=false;summary.focus();};
+      const live=document.createElement('p');live.id='luster-catalog-publish-live-status';live.style.cssText='margin:0 0 8px;color:#fde68a;font-weight:800;';live.setAttribute('aria-live','polite');
+      const caption=document.createElement('div');caption.textContent='تفاصيل آخر محاولة:';caption.style.cssText='font-size:11px;color:#fde68a;';
+      panel.append(live,caption,message,close);box.append(summary,panel);slot.appendChild(box);
+    }
+    box.dataset.noticeKind=state.kind;
+    box.querySelector('#luster-catalog-publish-label').textContent=state.kind==='checking'?'جارٍ التحقق من النشر':'النشر غير مؤكّد';
+    box.querySelector('#luster-catalog-publish-details').textContent=state.message;
+    const readStatus=window.lusterCloudBridge?._lastCatalogReadStatus;
+    box.querySelector('#luster-catalog-publish-live-status').textContent=state.kind==='checking'?'محاولة التحقق من النشر جارية، لم يتأكد الحفظ في السحابة بعد.':readStatus===429?'الحالة الحالية: آخر قراءة للكتالوج توقفت بسبب حدّ الاستخدام (429). النشر غير مؤكّد.':readStatus===200?'الحالة الحالية: نجحت آخر قراءة للكتالوج، لكن نجاح القراءة لا يؤكد نشر التعديلات.':'الحالة الحالية: لم يتأكد نشر التعديلات في السحابة أو وصولها للأجهزة الأخرى.';
+  };
   window.lusterCatalogPublishNotice=function(message,success=false,kind='publication'){
-    document.getElementById('luster-catalog-publish-notice')?.remove();
-    if(success){window.showToast('أكدت السحابة حفظ الكتالوج. وصوله للأجهزة الأخرى يحتاج التحقق من المزامنة.', 'success');return;}
-    const box=document.createElement('div');box.id='luster-catalog-publish-notice';box.dataset.noticeKind=kind;box.setAttribute('role','alert');box.style.cssText='position:fixed;left:12px;right:12px;bottom:78px;z-index:2147483646;background:#713f12;color:white;padding:14px;border:1px solid #fcd34d;border-radius:10px;font-size:13px;line-height:1.7';box.textContent=message;document.body.appendChild(box);
+    window.lusterCatalogNoticeState=success?null:{message,kind};
+    window.lusterRenderCatalogPublishNotice();
+    if(success)window.showToast('أكدت السحابة حفظ الكتالوج. وصوله للأجهزة الأخرى يحتاج التحقق من المزامنة.', 'success');
   };
 
 
@@ -17987,16 +18016,13 @@ class LusterOwnerDashboard {
     const connected=auth?.currentUser?.uid==='UImYxitPLoVnAuJla2wfC2Apids2';
     if(status){status.textContent=connected?'متصل بحساب المالك. قراءة البيانات والنشر لهما حالة منفصلة.':(!auth?'خدمة تسجيل الدخول غير جاهزة بعد. أعد المحاولة بعد تحميل الصفحة.':'غير مسجّل بحساب المالك. اضغط الزر لتسجيل الدخول.');status.style.color=connected?'#86efac':'#fcd34d';}
     if(button)button.textContent=connected?'التحقق من اتصال المالك':'تسجيل دخول المالك';
-    const notice=document.getElementById('luster-catalog-publish-notice');
-    if(connected && notice && (notice.dataset.noticeKind==='owner-login' || notice.textContent.includes('سجّل الدخول بحساب المالك قبل النشر'))){
-      notice.dataset.noticeKind='publication';
-      notice.textContent=window.lusterCloudBridge?._lastCatalogReadStatus===429?'حساب المالك متصل. قراءة الكتالوج متوقفة بسبب حدّ الاستخدام (429)، ولم يتأكد نشر التعديلات.':'حساب المالك متصل الآن. التنبيه يخص عملية نشر سابقة لم تتأكد؛ تسجيل الدخول وحده لا يؤكد وصول التعديلات للأجهزة الأخرى.';
-    }
+    window.lusterRenderCatalogPublishNotice?.();
   }
 
   returnToStorefront() {
     // Close only the dashboard UI. Keep owner auth, order alerts and unsaved DOM intact.
     document.getElementById('luster-owner-dashboard-modal')?.classList.remove('active');
+    const warning=document.getElementById('luster-catalog-publish-notice');if(warning?.tagName==='DETAILS')warning.open=false;
     document.querySelector('.luster-brand-logo')?.focus({preventScroll:true});
   }
 
@@ -18038,13 +18064,14 @@ class LusterOwnerDashboard {
             </div>
           </div>
 
-          <div id="owner-cloud-connection-card" style="background:#0f172a;border-bottom:1px solid #64748b;padding:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex-shrink:0;">
+          <div id="owner-cloud-connection-card" style="position:relative;z-index:5;background:#0f172a;border-bottom:1px solid #64748b;padding:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex-shrink:0;">
             <div style="flex:1;min-width:165px;font-size:12px;line-height:1.7;color:#e2e8f0;">
               <strong style="display:block;color:#e2c45d">اتصال حساب المالك بالسحابة</strong>
               <span id="owner-cloud-connection-status" role="status">جارٍ التحقق من الحساب...</span>
             </div>
             <button type="button" id="btn-owner-cloud-signin" style="display:block!important;visibility:visible!important;padding:11px 13px;border:1px solid #e2c45d;background:#d4af37;color:#111827;border-radius:8px;font-size:12px;font-weight:900;cursor:pointer;">تسجيل دخول المالك</button>
             <button type="button" id="btn-owner-cloud-password" style="display:block!important;visibility:visible!important;padding:11px 13px;border:1px solid #e2c45d;background:#182235;color:#fcd34d;border-radius:8px;font-size:12px;font-weight:900;cursor:pointer;">تغيير كلمة السر</button>
+            <div id="owner-catalog-status-slot" style="flex-shrink:0;max-width:100%;"></div>
           </div>
 
           <!-- Continuous Alarm Alert Banner -->
