@@ -10645,6 +10645,11 @@ class LusterCloudBridge {
       (localStorage.getItem('luster_owner_device_verified') === 'true' ||
        (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('luster_owner_authenticated') === 'true'));
     if (!isOwnerPublisher) return { skipped: 'not-owner-device' };
+    if(this.auth?.currentUser?.uid!=='UImYxitPLoVnAuJla2wfC2Apids2'){
+      this.saveLocalState(fullState || this.state);
+      window.lusterCatalogPublishNotice('التعديل محفوظ على هذا الجهاز فقط. سجّل الدخول بحساب المالك قبل النشر؛ لم تؤكد السحابة حفظه.');
+      return {skipped:'owner-cloud-login-required'};
+    }
     const rawTarget = fullState || (this.store && this.store.state) || this.state || this.loadLocalState();
     rawTarget.version = Date.now();
     rawTarget.lastUpdated = new Date().toISOString();
@@ -10675,19 +10680,26 @@ class LusterCloudBridge {
     }
 
     // 2. Guaranteed Multi-Cloud Sync (Offloads media to chunks -> Saves slim <20KB catalog to KVDB + Firestore + ntfy)
+    window.lusterCatalogPublishNotice('التعديل محفوظ على الجهاز. جارٍ التحقق من الكتالوج الحالي قبل النشر لحماية المنتجات الموجودة.');
     (async () => {
       try {
+        const snapshots=await Promise.all([this.firestoreRestGetDoc('luster_store','catalog'),this.firestoreRestGetDoc('luster_store','catalog_sync')]);
+        if(snapshots.some(snapshot=>!snapshot))throw new Error('current-catalog-could-not-be-verified');
+        const mergedProducts=new Map();
+        for(const snapshot of snapshots.sort((a,b)=>(Number(a.version)||0)-(Number(b.version)||0)))for(const product of snapshot.products||[])if(product?.id)mergedProducts.set(product.id,product);
+        for(const product of this.state.products||[])if(product?.id)mergedProducts.set(product.id,product);
+        this.state.products=[...mergedProducts.values()];
         const cloudSafeState = await this.prepareStateForCloudSync(this.state);
 
-        await Promise.allSettled([
-          this.firestoreRestSetDoc('luster_store', 'catalog_sync', cloudSafeState),
-          this.db ? Promise.race([
-            this.db.collection('luster_store').doc('catalog').set(cloudSafeState),
-            new Promise(r => setTimeout(r, 3500))
-          ]) : Promise.resolve()
+        const results=await Promise.all([
+          this.firestoreRestSetDoc('luster_store','catalog_sync',cloudSafeState),
+          this.firestoreRestSetDoc('luster_store','catalog',cloudSafeState)
         ]);
+        if(!results.every(result=>result===true))throw new Error('cloud-catalog-write-not-confirmed');
+        window.lusterCatalogPublishNotice('',true);
 
       } catch (e) {
+        window.lusterCatalogPublishNotice('التعديل محفوظ على هذا الجهاز فقط. تعذر تأكيد نشر الكتالوج في السحابة، لا تعتبره وصل للأجهزة الأخرى بعد.');
         console.warn('publishCatalogToCloud warning:', e);
       }
     })();
@@ -11632,6 +11644,8 @@ class LusterCloudBridge {
     const publicKeys=['version','lastUpdated','brand','phoneManager','logo','theme','motion','hero','dockBar','paymentSettings','loyalty','referralChallenge','gamification','coupons','categories','products','stories','campaigns','developerInfo','aiAdvisor','media','uiVisibility','customTexts','deletedProductIds','ownerClearedCatalog','shippingSettings','cartSettings','lighting','flashBanner','socialLinks','aiChatInstructions','expiredCoupons'];
     const cloned=JSON.parse(JSON.stringify(Object.fromEntries(publicKeys.filter(k=>Object.hasOwn(source,k)).map(k=>[k,source[k]]))));
     for(const product of cloned.products || []) for(const key of ['costPrice','unitCost','purchasePrice','supplier','supplierPhone','supplierInfo','profit','grossProfit','margin','internalNotes'])delete product[key];
+    cloned.phoneManager={numbers:[{id:'owner_contact_20261122',number:'01099251781',label:'رقم لاستر الرسمي',visible:true,purposes:['call','whatsapp','support'],isPrimaryFor:['call','whatsapp','support']}]};
+    if(cloned.brand){cloned.brand.phone='01099251781';cloned.brand.whatsapp='201099251781';}
     const uploadPromises = [];
 
     const offloadDataField = (val, prefix) => {
@@ -14501,24 +14515,34 @@ class ExperienceEngine {
   // Owner secure cloud publish: after PIN unlock, if the cloud catalog
   // enables it (security.ownerAuthEnabled), sign the device into Firebase with
   // the owner email account so Firestore rules accept writes from this device only.
-  window.lusterOwnerCloudAuth = async function(state) {
-    try {
-      localStorage.removeItem('luster_owner_auth');
-      const bridge = window.lusterCloudBridge;
-      const auth = bridge?.auth || (window.firebase?.auth ? firebase.auth() : null);
-      if (!auth) { window.showToast('تعذر الاتصال بخدمة تسجيل الدخول', 'error'); return false; }
-      if (auth.currentUser?.uid === 'UImYxitPLoVnAuJla2wfC2Apids2') return true;
-      const email = prompt('سجّل الدخول بحساب مالك المتجر لتفعيل النشر الآمن');
-      if (!email) return false;
-      const password = prompt('كلمة مرور حساب المالك');
-      if (!password) return false;
-      await auth.signInWithEmailAndPassword(email.trim(), password);
-      if (auth.currentUser?.uid !== 'UImYxitPLoVnAuJla2wfC2Apids2') {
-        window.showToast('هذا الحساب ليس حساب مالك المتجر', 'error'); return false;
-      }
-      window.showToast('تم تسجيل الدخول بصلاحية المالك', 'success');
-      return true;
-    } catch(e) { window.showToast('تعذر تسجيل الدخول، راجع بيانات حساب المالك', 'error'); return false; }
+  window.lusterOwnerCloudAuth = async function() {
+    const auth=window.lusterCloudBridge?.auth;
+    if(auth?.currentUser?.uid==='UImYxitPLoVnAuJla2wfC2Apids2')return true;
+    if(!auth){window.showToast('خدمة تسجيل الدخول غير جاهزة. أعد المحاولة بعد تحميل الصفحة.', 'error');return false;}
+    if(window._lusterOwnerCloudAuthPending)return window._lusterOwnerCloudAuthPending;
+    window._lusterOwnerCloudAuthPending=new Promise(resolve=>{
+      const overlay=document.createElement('div');overlay.id='luster-owner-cloud-signin';
+      overlay.style.cssText='position:fixed;inset:0;z-index:2147483647;background:#000c;display:flex;align-items:center;justify-content:center;padding:18px';
+      overlay.innerHTML=`<form style="background:#15151c;color:white;border:1px solid #d4af37;border-radius:16px;padding:22px;width:min(100%,390px);display:grid;gap:14px" autocomplete="on"><h3 style="color:#e2c45d;margin:0">تسجيل دخول مالك المتجر</h3><p style="font-size:13px;line-height:1.7;margin:0">رمز اللوحة يفتح الإدارة على هذا الجهاز. لقراءة الطلبات أو نشر التعديلات بأمان، سجّل الدخول بحساب المالك مرة واحدة.</p><label>البريد الإلكتروني<input id="owner-cloud-email" type="email" autocomplete="username" value="owner@luster.store" required style="width:100%;box-sizing:border-box;padding:12px;background:#08080c;color:white;border:1px solid #666;border-radius:8px;direction:ltr"></label><label>كلمة المرور<input id="owner-cloud-password" type="password" autocomplete="current-password" required style="width:100%;box-sizing:border-box;padding:12px;background:#08080c;color:white;border:1px solid #666;border-radius:8px"></label><div role="alert" id="owner-cloud-error" style="color:#fca5a5;font-size:13px"></div><button type="submit" style="padding:13px;background:#d4af37;border:0;border-radius:8px;font-weight:bold">تسجيل الدخول الآمن</button><button type="button" id="owner-cloud-cancel" style="padding:10px;background:none;border:1px solid #777;color:white;border-radius:8px">العودة بدون اتصال المالك</button></form>`;
+      document.body.appendChild(overlay);
+      const finish=value=>{overlay.querySelector('#owner-cloud-password').value='';overlay.remove();window._lusterOwnerCloudAuthPending=null;resolve(value);};
+      overlay.querySelector('#owner-cloud-cancel').onclick=()=>finish(false);
+      overlay.querySelector('form').onsubmit=async event=>{
+        event.preventDefault();const button=overlay.querySelector('button[type=submit]');button.disabled=true;
+        try {
+          await auth.signInWithEmailAndPassword(overlay.querySelector('#owner-cloud-email').value.trim(),overlay.querySelector('#owner-cloud-password').value);
+          if(auth.currentUser?.uid!=='UImYxitPLoVnAuJla2wfC2Apids2'){await auth.signOut();throw new Error('wrong-owner');}
+          window.lusterCloudBridge._nextOrdersReadAt=0;finish(true);
+        } catch(e){overlay.querySelector('#owner-cloud-error').textContent='تعذر تسجيل الدخول بحساب المالك. راجع البيانات وحاول مجددًا.';button.disabled=false;}
+      };
+    });
+    return window._lusterOwnerCloudAuthPending;
+  };
+
+  window.lusterCatalogPublishNotice=function(message,success=false){
+    document.getElementById('luster-catalog-publish-notice')?.remove();
+    if(success){window.showToast('أكدت السحابة حفظ الكتالوج. وصوله للأجهزة الأخرى يحتاج التحقق من المزامنة.', 'success');return;}
+    const box=document.createElement('div');box.id='luster-catalog-publish-notice';box.setAttribute('role','alert');box.style.cssText='position:fixed;left:12px;right:12px;bottom:78px;z-index:2147483646;background:#713f12;color:white;padding:14px;border:1px solid #fcd34d;border-radius:10px;font-size:13px;line-height:1.7';box.textContent=message;document.body.appendChild(box);
   };
 
 
@@ -17879,6 +17903,7 @@ class LusterOwnerDashboard {
         this.alarmEngine.markAsOwnerDevice(true);
         overlay.style.display = 'none';
         window.showToast('تم التحقق بنجاح! مرحبًا بك في لوحة تحكم المالك 👑', 'success');
+        await window.lusterOwnerCloudAuth();
         this.renderDashboardModal();
         this.checkPendingNewOrders();
       } else {
