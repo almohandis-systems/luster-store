@@ -8409,7 +8409,7 @@ class LusterCloudBridge {
     // Background polling every 3.5 seconds
     this.pollInterval = setInterval(() => {
       this.syncNow();
-    }, 3500);
+    }, 60000);
   }
 
   async syncNow() {
@@ -12589,6 +12589,37 @@ class ExperienceEngine {
 // --- Module: studio.js ---
 // LUSTER Studio — Master Visual CMS, In-Context Design Studio, Motion Director & AI Advisor
 // 100% Real Functions | Owner Auth PIN Protected | Preview -> Save -> Publish Architecture
+  // Owner secure cloud publish: after PIN unlock, if the cloud catalog
+  // enables it (security.ownerAuthEnabled), sign the device into Firebase with
+  // the owner email account so Firestore rules accept writes from this device only.
+  window.lusterOwnerCloudAuth = async function(state) {
+    try {
+      const sec = state && state.security;
+      if (!sec || !sec.ownerAuthEnabled) return;
+      const bridge = window.lusterCloudBridge;
+      const auth = (bridge && bridge.auth) ? bridge.auth : (window.firebase && firebase.auth ? firebase.auth() : null);
+      if (!auth) return;
+      let creds = null;
+      try { creds = JSON.parse(localStorage.getItem('luster_owner_auth') || 'null'); } catch(e) {}
+      if (!creds || !creds.e || !creds.p) {
+        const em = prompt('تأمين النشر بصلاحية المالك (خطوة مرة واحدة): أدخل إيميل المالك');
+        if (!em) return;
+        const pw = prompt('أدخل باسورد المالك');
+        if (!pw) return;
+        creds = { e: em.trim(), p: pw };
+      }
+      const cur = auth.currentUser;
+      if (cur && cur.email === creds.e) return;
+      await auth.signInWithEmailAndPassword(creds.e, creds.p);
+      localStorage.setItem('luster_owner_auth', JSON.stringify(creds));
+      window.showToast('تم تفعيل النشر الآمن بصلاحية المالك ✓', 'success');
+    } catch(err) {
+      console.warn('owner cloud sign-in notice:', err);
+      try { localStorage.removeItem('luster_owner_auth'); } catch(e) {}
+      window.showToast('تعذر تفعيل النشر الآمن، تأكد من الإيميل والباسورد', 'error');
+    }
+  };
+
 class LusterStudio {
   constructor(store, motionEngine) {
     this.store = store;
@@ -12688,6 +12719,7 @@ class LusterStudio {
         modal.style.display = 'none';
         window.showToast('تم التحقق بنجاح! مرحبًا بك في استوديو المالك ✦', 'success');
         this.toggleStudioMode(true);
+        try { window.lusterOwnerCloudAuth(this.store ? (this.store.getState ? this.store.getState() : this.store.state) : null); } catch(e) {}
       } else {
         msgEl.style.display = 'block';
         msgEl.textContent = 'الرمز السري غير صحيح! تأكد من إدخال رمز المالك الصحيح.';
@@ -15690,7 +15722,7 @@ class LusterOwnerDashboard {
     // Background polling every 3.5 seconds to detect orders when in background or closed tab
     setInterval(() => {
       this.checkPendingNewOrders();
-    }, 2500);
+    }, 15000);
 
     // Listen for Service Worker messages
     if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
@@ -25633,9 +25665,13 @@ class LusterApp {
         this.store.on('STATE_INITIALIZED', () => {
       this.mount();
     });
-    this.store.on('LIVE_STATE_UPDATED', ({ version, description }) => {
-      window.showToast(`تحديث لحظي من الخادم (v${version}): ${description}`, 'info');
-      this.mount();
+    this.store.on('LIVE_STATE_UPDATED', () => {
+      try {
+        if (typeof applyTextCustomizations === 'function') applyTextCustomizations(this.store);
+        if (typeof applyMediaCustomizations === 'function') applyMediaCustomizations(this.store);
+        if (typeof applyThemeCustomizations === 'function') applyThemeCustomizations(this.store);
+        if (window.lusterApp && typeof window.lusterApp.renderProducts === 'function') window.lusterApp.renderProducts();
+      } catch(e) { console.warn('silent sync notice:', e); }
     });
 
     this.store.on('SECTION_SAVED', ({ section }) => {
