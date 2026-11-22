@@ -9893,6 +9893,7 @@ class LusterCloudBridge {
     this.initFirestoreEngine();
     this.initNetworkListeners();
     this.initRealtimeSubscriptions();
+    try { localStorage.removeItem('luster_owner_auth'); } catch(e) {}
     this.startBackgroundSync();
     setTimeout(() => this.flushPendingOrders(), 5000);
     window.addEventListener('online', () => this.flushPendingOrders());
@@ -10036,13 +10037,14 @@ class LusterCloudBridge {
         if (!this.db) return;
         try {
           if (this._unsubOrders) { try { this._unsubOrders(); } catch(e) {} }
-          this._unsubOrders = this.db.collection('luster_orders')
+          if (this.auth?.currentUser?.uid === 'UImYxitPLoVnAuJla2wfC2Apids2') this._unsubOrders = this.db.collection('luster_orders')
             .orderBy('createdAt', 'desc')
             .limit(50)
             .onSnapshot((snapshot) => {
               let hasNewOrder = false;
               snapshot.docChanges().forEach((change) => {
-                const orderData = change.doc.data();
+                let orderData = change.doc.data();
+                if (orderData.jsonPayload) { try { orderData = JSON.parse(orderData.jsonPayload); } catch(e) { return; } }
                 if (change.type === 'added' || change.type === 'modified') {
                   this.handleInboundOrderData(orderData);
                   if (orderData.statusCode === 'new') {
@@ -10062,7 +10064,8 @@ class LusterCloudBridge {
           this._unsubCatalog = this.db.collection('luster_store').doc('catalog')
             .onSnapshot((doc) => {
               if (doc && doc.exists) {
-                const data = doc.data();
+                let data = doc.data();
+                if (data.jsonPayload) { try { data = JSON.parse(data.jsonPayload); } catch(e) { return; } }
                 if (data && (data.brand || data.products || data.categories || data.customTexts || data.motion)) {
                   this.handleInboundStateData({
                     type: 'STATE_UPDATED',
@@ -10229,27 +10232,6 @@ class LusterCloudBridge {
         };
       } catch(e) {}
     }
-
-    // 2. ntfy.sh Orders Stream (instant pub/sub)
-    try {
-      if (this.ntfyOrdersEs) this.ntfyOrdersEs.close();
-      this.ntfyOrdersEs = new EventSource(`https://ntfy.sh/${this.ordersTopic}/sse`);
-      this.ntfyOrdersEs.onmessage = (event) => {
-        try {
-          const envelope = JSON.parse(event.data);
-          if (envelope && envelope.message) {
-            try {
-              let msg = envelope.message;
-              if (msg.includes('DATA:')) {
-                msg = msg.split('DATA:')[1].trim();
-              }
-              const payload = JSON.parse(msg);
-              this.handleInboundOrderData(payload);
-            } catch(e) {}
-          }
-        } catch(e) {}
-      };
-    } catch(e) {}
 
     // 3. ntfy.sh Live State Stream (instant custom texts, products, studio changes)
     try {
@@ -10489,81 +10471,21 @@ class LusterCloudBridge {
     const statusUpdatesMap = new Map();
     const tasks = [];
 
-    // 1. Primary Instant Multi-Phone Source: Firebase Firestore REST API (orders_sync)
-    tasks.push(
-      this.firestoreRestGetDoc('luster_store', 'orders_sync').then(restData => {
-        if (restData && Array.isArray(restData.orders)) {
-          restData.orders.forEach(o => {
-            if (o && o.orderId) cloudOrders.push(o);
-          });
+    if (this.auth?.currentUser?.uid !== 'UImYxitPLoVnAuJla2wfC2Apids2') return;
+    tasks.push((async () => {
+      const {baseUrl,keyParam} = this.getFirestoreRestBaseUrl();
+      const token = await this.auth.currentUser.getIdToken();
+      let page = '';
+      do {
+        const res = await fetch(`${baseUrl}/luster_orders${keyParam}&pageSize=100${page ? '&pageToken='+encodeURIComponent(page) : ''}`, {headers:{Authorization:'Bearer '+token},signal:AbortSignal.timeout(8000)});
+        if (!res.ok) return;
+        const data = await res.json();
+        for (const doc of data.documents || []) {
+          try { const order = JSON.parse(doc.fields?.jsonPayload?.stringValue || '{}'); if (order.orderId) cloudOrders.push(order); } catch(e) {}
         }
-      }).catch(() => {})
-    );
-
-    // 2. Secondary Guaranteed Multi-Device Source: Central KVDB.io Orders Store
-    tasks.push(
-      safeCloudFetch(`https://kvdb.io/4y9h8K5P7vG6jN3x2w/orders_${this.storeId}`).then(async kvRes => {
-        if (kvRes && kvRes.ok) {
-          const kvData = await kvRes.json();
-          if (Array.isArray(kvData) && kvData.length > 0) {
-            cloudOrders.push(...kvData);
-          }
-        }
-      }).catch(() => {})
-    );
-
-    // 3. Tertiary Real-Time Multi-Device Pub/Sub Buffer (ntfy.sh with since=12h)
-    tasks.push(
-      safeCloudFetch(`https://ntfy.sh/${this.ordersTopic}/json?poll=1&since=12h`).then(async res => {
-        if (res && res.ok) {
-          const textData = await res.text();
-          const lines = textData.trim().split('\n');
-          for (const line of lines) {
-            if (!line.trim()) continue;
-            try {
-              const env = JSON.parse(line);
-              if (env && env.message) {
-                let msg = env.message;
-                if (msg.includes('DATA:')) {
-                  msg = msg.split('DATA:')[1].trim();
-                }
-                const parsed = JSON.parse(msg);
-                if (parsed && parsed.type === 'ORDER_STATUS_UPDATED' && parsed.orderId) {
-                  statusUpdatesMap.set(parsed.orderId, parsed);
-                  if (parsed.order && parsed.order.orderId) cloudOrders.push(parsed.order);
-                } else if (parsed && parsed.orderId) {
-                  cloudOrders.push(parsed);
-                } else if (parsed && parsed.order && parsed.order.orderId) {
-                  cloudOrders.push(parsed.order);
-                }
-              }
-            } catch(err) {}
-          }
-        }
-      }).catch(() => {})
-    );
-
-    // 4. Quaternary Cloud Firestore JS SDK (with fast 2s timeout)
-    if (this.db) {
-      tasks.push(
-        Promise.race([
-          this.db.collection('luster_orders').limit(50).get(),
-          new Promise(r => setTimeout(() => r(null), 2000))
-        ]).then(snap => {
-          if (snap && typeof snap.forEach === 'function') {
-            snap.forEach(doc => {
-              let ord = doc.data();
-              if (ord && ord.jsonPayload && typeof ord.jsonPayload === 'string') {
-                try { ord = JSON.parse(ord.jsonPayload); } catch(e) {}
-              } else if (ord && ord.fields && ord.fields.jsonPayload && ord.fields.jsonPayload.stringValue) {
-                try { ord = JSON.parse(ord.fields.jsonPayload.stringValue); } catch(e) {}
-              }
-              if (ord && ord.orderId) cloudOrders.push(ord);
-            });
-          }
-        }).catch(() => {})
-      );
-    }
+        page = data.nextPageToken || '';
+      } while(page);
+    })());
 
     await Promise.allSettled(tasks);
 
@@ -10642,6 +10564,8 @@ class LusterCloudBridge {
       const { baseUrl, keyParam } = this.getFirestoreRestBaseUrl();
       const url = `${baseUrl}/${collectionName}/${docId}${keyParam}`;
       const cleanJson = JSON.stringify(payloadObj);
+      const headers = {'Content-Type':'application/json'};
+      if (this.auth?.currentUser) headers.Authorization = 'Bearer ' + await this.auth.currentUser.getIdToken();
       const body = {
         fields: {
           version: { integerValue: String(payloadObj.version || Date.now()) },
@@ -10651,7 +10575,7 @@ class LusterCloudBridge {
       };
       const res = await safeCloudFetch(url, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(body)
       });
       return !!(res && res.ok);
@@ -10664,7 +10588,9 @@ class LusterCloudBridge {
     try {
       const { baseUrl, keyParam } = this.getFirestoreRestBaseUrl();
       const url = `${baseUrl}/${collectionName}/${docId}${keyParam}`;
-      const res = await safeCloudFetch(url);
+      const headers = {};
+      if (this.auth?.currentUser) headers.Authorization = 'Bearer ' + await this.auth.currentUser.getIdToken();
+      const res = await safeCloudFetch(url, {headers});
       if (res && res.ok) {
         const doc = await res.json();
         if (doc && doc.fields && doc.fields.jsonPayload && doc.fields.jsonPayload.stringValue) {
@@ -11029,33 +10955,7 @@ class LusterCloudBridge {
         this.saveLocalOrders(this.orders);
 
         // Instant Cloud Status Sync across all Owner Phones
-        const syncOrdersPayload = {
-          version: Date.now(),
-          updatedAt: new Date().toISOString(),
-          orders: this.orders.slice(0, 80).map(o => ({ ...o, receiptImage: null }))
-        };
-        const slimOrd = { ...ord, receiptImage: null };
-        (async () => {
-          await Promise.allSettled([
-            this.firestoreRestSetDoc('luster_store', 'orders_sync', syncOrdersPayload),
-            this.firestoreRestSetDoc('luster_orders', ord.orderId, ord),
-            safeCloudFetch(`https://kvdb.io/4y9h8K5P7vG6jN3x2w/orders_${this.storeId}`, {
-              method: 'POST',
-              body: JSON.stringify(syncOrdersPayload.orders)
-            }),
-            safeCloudFetch(`https://ntfy.sh/${this.ordersTopic}`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-              body: `DATA:${JSON.stringify({
-                type: 'ORDER_STATUS_UPDATED',
-                orderId: ord.orderId,
-                statusCode: ord.statusCode,
-                status: ord.status,
-                order: slimOrd
-              })}`
-            })
-          ]);
-        })();
+        this.firestoreRestSetDoc('luster_orders', ord.orderId, ord).catch(() => {});
 
         return buildRes({ success: true, order: ord });
       }
@@ -14639,31 +14539,24 @@ class ExperienceEngine {
   // the owner email account so Firestore rules accept writes from this device only.
   window.lusterOwnerCloudAuth = async function(state) {
     try {
-      const sec = state && state.security;
-      if (!sec || !sec.ownerAuthEnabled) return;
+      localStorage.removeItem('luster_owner_auth');
       const bridge = window.lusterCloudBridge;
-      const auth = (bridge && bridge.auth) ? bridge.auth : (window.firebase && firebase.auth ? firebase.auth() : null);
-      if (!auth) return;
-      let creds = null;
-      try { creds = JSON.parse(localStorage.getItem('luster_owner_auth') || 'null'); } catch(e) {}
-      if (!creds || !creds.e || !creds.p) {
-        const em = prompt('تأمين النشر بصلاحية المالك (خطوة مرة واحدة): أدخل إيميل المالك');
-        if (!em) return;
-        const pw = prompt('أدخل باسورد المالك');
-        if (!pw) return;
-        creds = { e: em.trim(), p: pw };
+      const auth = bridge?.auth || (window.firebase?.auth ? firebase.auth() : null);
+      if (!auth) { window.showToast('تعذر الاتصال بخدمة تسجيل الدخول', 'error'); return false; }
+      if (auth.currentUser?.uid === 'UImYxitPLoVnAuJla2wfC2Apids2') return true;
+      const email = prompt('سجّل الدخول بحساب مالك المتجر لتفعيل النشر الآمن');
+      if (!email) return false;
+      const password = prompt('كلمة مرور حساب المالك');
+      if (!password) return false;
+      await auth.signInWithEmailAndPassword(email.trim(), password);
+      if (auth.currentUser?.uid !== 'UImYxitPLoVnAuJla2wfC2Apids2') {
+        window.showToast('هذا الحساب ليس حساب مالك المتجر', 'error'); return false;
       }
-      const cur = auth.currentUser;
-      if (cur && cur.email === creds.e) return;
-      await auth.signInWithEmailAndPassword(creds.e, creds.p);
-      localStorage.setItem('luster_owner_auth', JSON.stringify(creds));
-      window.showToast('تم تفعيل النشر الآمن بصلاحية المالك ✓', 'success');
-    } catch(err) {
-      console.warn('owner cloud sign-in notice:', err);
-      try { localStorage.removeItem('luster_owner_auth'); } catch(e) {}
-      window.showToast('تعذر تفعيل النشر الآمن، تأكد من الإيميل والباسورد', 'error');
-    }
+      window.showToast('تم تسجيل الدخول بصلاحية المالك', 'success');
+      return true;
+    } catch(e) { window.showToast('تعذر تسجيل الدخول، راجع بيانات حساب المالك', 'error'); return false; }
   };
+
 
 class LusterStudio {
   constructor(store, motionEngine) {
