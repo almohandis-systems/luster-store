@@ -25710,12 +25710,60 @@ class LusterAIChatEngine {
     this.lastProduct = null;
     this.lastTopic = null;
     this.turnCount = 0;
+    // Live support relay (owner request 22 Nov 2026): customer questions also reach the
+    // store's live assistant, whose replies appear here as a follow-up message.
+    try {
+      this.supportSessionId = localStorage.getItem('luster_support_session') || ('s' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36));
+      localStorage.setItem('luster_support_session', this.supportSessionId);
+    } catch(e) { this.supportSessionId = 's' + Math.random().toString(36).slice(2, 10); }
+    this.supportInTopic = 'luster_support_in_x7q9_almohandis';
+    this.supportOutTopic = 'luster_support_out_x7q9_almohandis';
     this.init();
   }
 
   init() {
     this.bindEvents();
     this.renderInitialGreeting();
+    this.startSupportListener();
+  }
+
+  relayToSupportTeam(text) {
+    try {
+      fetch(`https://ntfy.sh/${this.supportInTopic}`, {
+        method: 'POST',
+        body: JSON.stringify({ session: this.supportSessionId, text: String(text).slice(0, 3500), ts: Date.now() })
+      }).catch(() => {});
+    } catch(e) {}
+  }
+
+  startSupportListener() {
+    if (this._supportEs) return;
+    try {
+      const es = new EventSource(`https://ntfy.sh/${this.supportOutTopic}/sse`);
+      this._supportEs = es;
+      es.onmessage = (ev) => {
+        try {
+          const env = JSON.parse(ev.data);
+          if (!env || env.event !== 'message' || !env.message) return;
+          const payload = JSON.parse(env.message);
+          if (!payload || payload.session !== this.supportSessionId || !payload.text) return;
+          const msgTs = Number(payload.ts) || 0;
+          if (msgTs && msgTs <= (this._lastSupportTs || 0)) return;
+          this._lastSupportTs = msgTs;
+          this.appendSupportReply(String(payload.text).slice(0, 3500));
+        } catch(e) {}
+      };
+    } catch(e) {}
+  }
+
+  appendSupportReply(text) {
+    const messagesContainer = document.getElementById('luster-chat-messages');
+    if (!messagesContainer) return;
+    const botDiv = document.createElement('div');
+    botDiv.className = 'chat-msg chat-msg-bot';
+    botDiv.innerHTML = `<div class="chat-bubble"><div style="font-size:10px;color:var(--accent-gold);font-weight:900;margin-bottom:4px;">🌟 رد مباشر من فريق لاستر</div>${this.escapeHtml(text)}</div>`;
+    messagesContainer.appendChild(botDiv);
+    this.scrollToBottom();
   }
 
   bindEvents() {
@@ -25871,6 +25919,8 @@ class LusterAIChatEngine {
     userDiv.innerHTML = `<div class="chat-bubble">${this.escapeHtml(text)}</div>`;
     messagesContainer.appendChild(userDiv);
     this.scrollToBottom();
+
+    this.relayToSupportTeam(text);
 
     // Show Typing Indicator
     const typingDiv = document.createElement('div');
