@@ -25704,11 +25704,9 @@ class LusterAIChatEngine {
     // Live support relay (owner request 22 Nov 2026): customer questions also reach the
     // store's live assistant, whose replies appear here as a follow-up message.
     try {
-      this.supportSessionId = localStorage.getItem('luster_support_session') || ('s' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36));
-      localStorage.setItem('luster_support_session', this.supportSessionId);
+      this.supportSessionId = localStorage.getItem('luster_support_session_v2') || ('x' + Array.from(crypto.getRandomValues(new Uint8Array(12))).map(b => (b % 36).toString(36)).join('') + Date.now().toString(36));
+      localStorage.setItem('luster_support_session_v2', this.supportSessionId);
     } catch(e) { this.supportSessionId = 's' + Math.random().toString(36).slice(2, 10); }
-    this.supportInTopic = 'luster_support_in_x7q9_almohandis';
-    this.supportOutTopic = 'luster_support_out_x7q9_almohandis';
     this.init();
   }
 
@@ -25721,11 +25719,7 @@ class LusterAIChatEngine {
   relayToSupportTeam(text) {
     try {
       const msg = String(text).slice(0, 3500);
-      fetch(`https://ntfy.sh/${this.supportInTopic}`, {
-        method: 'POST',
-        body: JSON.stringify({ session: this.supportSessionId, text: msg, ts: Date.now() })
-      }).catch(() => {});
-      // Durable private inbox (Firestore, owner-gated by security rules)
+      // Durable private inbox (Firestore, access enforced by security rules)
       fetch('https://firestore.googleapis.com/v1/projects/luster-4a916/databases/(default)/documents/luster_support_in?key=AIzaSyChOCsdmoBwQwrv_2tezDtGJJfC8O6LBU4', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -25756,27 +25750,6 @@ class LusterAIChatEngine {
             this._lastSupportTs = fTs;
             try { localStorage.setItem('luster_support_last_ts_' + this.supportSessionId, String(fTs)); } catch(e) {}
             this.appendSupportReply(String(fTxt).slice(0, 3500));
-          }
-        }
-      } catch(e) {}
-      // 2. Interim ntfy channel (retired after the private relay cutover)
-      try {
-        const res = await fetch(`https://ntfy.sh/${this.supportOutTopic}/json?poll=1&since=2m`);
-        if (res && res.ok) {
-          const textData = await res.text();
-          for (const line of textData.trim().split('\n')) {
-            if (!line.trim()) continue;
-            try {
-              const env = JSON.parse(line);
-              if (!env || env.event !== 'message' || !env.message) continue;
-              const payload = JSON.parse(env.message);
-              if (!payload || payload.session !== this.supportSessionId || !payload.text) continue;
-              const msgTs = Number(payload.ts) || (env.time * 1000) || 0;
-              if (msgTs && msgTs <= (this._lastSupportTs || 0)) continue;
-              this._lastSupportTs = msgTs;
-              try { localStorage.setItem('luster_support_last_ts_' + this.supportSessionId, String(msgTs)); } catch(e) {}
-              this.appendSupportReply(String(payload.text).slice(0, 3500));
-            } catch(e) {}
           }
         }
       } catch(e) {}
