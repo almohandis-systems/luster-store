@@ -10041,6 +10041,7 @@ class LusterCloudBridge {
             .orderBy('createdAt', 'desc')
             .limit(50)
             .onSnapshot((snapshot) => {
+              this._ordersRealtimeHealthy = !snapshot.metadata.fromCache;
               let hasNewOrder = false;
               snapshot.docChanges().forEach((change) => {
                 let orderData = change.doc.data();
@@ -10057,12 +10058,14 @@ class LusterCloudBridge {
                 activeStore.emit('NEW_ORDER_BROADCAST', { type: 'NEW_ORDER' });
               }
             }, (err) => {
+              this._ordersRealtimeHealthy = false;
               console.warn('Firestore orders onSnapshot notice:', err);
             });
 
           if (this._unsubCatalog) { try { this._unsubCatalog(); } catch(e) {} }
           this._unsubCatalog = this.db.collection('luster_store').doc('catalog')
             .onSnapshot((doc) => {
+              this._catalogRealtimeHealthy = !doc.metadata.fromCache;
               if (doc && doc.exists) {
                 let data = doc.data();
                 if (data.jsonPayload) { try { data = JSON.parse(data.jsonPayload); } catch(e) { return; } }
@@ -10076,6 +10079,7 @@ class LusterCloudBridge {
                 }
               }
             }, (err) => {
+              this._catalogRealtimeHealthy = false;
               console.warn('Firestore catalog onSnapshot notice:', err);
             });
         } catch(e) {}
@@ -10451,6 +10455,7 @@ class LusterCloudBridge {
   }
 
   async fetchCloudOrders() {
+    if (this._ordersRealtimeHealthy && this.orders.length) return;
     let cloudOrders = [];
     const statusUpdatesMap = new Map();
     const tasks = [];
@@ -10648,6 +10653,7 @@ class LusterCloudBridge {
   }
 
   async fetchCloudState() {
+    if (this._catalogRealtimeHealthy) return;
     const candidates = [];
     const tasks = [];
 
@@ -25668,6 +25674,10 @@ class LusterAIChatEngine {
     setTimeout(()=>this.flushSupportQueue(),5000);
     setInterval(()=>this.flushSupportQueue(),60000);
 
+    try {
+      const saved = JSON.parse(localStorage.getItem('luster_support_transcript_' + this.supportSessionId) || '[]');
+      for (const text of saved) this.appendSupportReply(String(text), true);
+    } catch(e) {}
     this.startSupportListener();
   }
 
@@ -25675,6 +25685,7 @@ class LusterAIChatEngine {
     try {
       const key = 'luster_pending_support_v2';
       const queue = JSON.parse(localStorage.getItem(key) || '{}');
+      localStorage.setItem('luster_support_has_conversation_v2', 'true');
       const id = crypto.randomUUID();
       queue[id] = {session:this.supportSessionId,text:String(text).slice(0,3500),ts:Date.now()};
       localStorage.setItem(key,JSON.stringify(queue));
@@ -25708,27 +25719,43 @@ class LusterAIChatEngine {
     this._supportPoll = true;
     try { this._lastSupportTs = Number(localStorage.getItem('luster_support_last_ts_' + this.supportSessionId)) || 0; } catch(e) { this._lastSupportTs = 0; }
     const poll = async () => {
+      const active = document.visibilityState === 'visible' && document.getElementById('drawer-luster-chat')?.classList.contains('active');
+      let sent = false; try { sent = localStorage.getItem('luster_support_has_conversation_v2') === 'true'; } catch(e) {}
+      if (!active || !sent) { setTimeout(poll, 60000); return; }
+
       // 1. Durable per-session replies doc (survives page closes, no rolling window)
       try {
         const fr = await fetch(`https://firestore.googleapis.com/v1/projects/luster-4a916/databases/(default)/documents/luster_support_replies/${this.supportSessionId}?key=AIzaSyChOCsdmoBwQwrv_2tezDtGJJfC8O6LBU4`);
         if (fr && fr.ok) {
           const doc = await fr.json();
           const f = doc.fields || {};
-          const fTxt = f.text && f.text.stringValue;
-          const fTs = Number(f.ts && f.ts.integerValue) || 0;
-          if (fTxt && fTs > (this._lastSupportTs || 0)) {
-            this._lastSupportTs = fTs;
-            try { localStorage.setItem('luster_support_last_ts_' + this.supportSessionId, String(fTs)); } catch(e) {}
-            this.appendSupportReply(String(fTxt).slice(0, 3500));
+          let replies = [];
+          try { replies = JSON.parse(f.history?.stringValue || '[]'); } catch(e) {}
+          if (!Array.isArray(replies)) replies = [];
+          if (!replies.length && f.text?.stringValue) replies = [{text:f.text.stringValue,ts:Number(f.ts?.integerValue)||0}];
+          for (const reply of replies.sort((a,b)=>Number(a.ts)-Number(b.ts))) {
+            const ts = Number(reply.ts)||0;
+            if (typeof reply.text === 'string' && ts > (this._lastSupportTs || 0)) {
+              this._lastSupportTs = ts;
+              try { localStorage.setItem('luster_support_last_ts_' + this.supportSessionId, String(ts)); } catch(e) {}
+              this.appendSupportReply(reply.text.slice(0,3500));
+            }
           }
         }
       } catch(e) {}
-      setTimeout(poll, 25000);
+      setTimeout(poll, 60000);
     };
     setTimeout(poll, 4000);
   }
 
-  appendSupportReply(text) {
+  appendSupportReply(text, replay = false) {
+    if (!replay) {
+      try {
+        const key = 'luster_support_transcript_' + this.supportSessionId;
+        const history = JSON.parse(localStorage.getItem(key) || '[]');
+        history.push(text); localStorage.setItem(key, JSON.stringify(history.slice(-100)));
+      } catch(e) {}
+    }
     const messagesContainer = document.getElementById('luster-chat-messages');
     if (!messagesContainer) return;
     const botDiv = document.createElement('div');
