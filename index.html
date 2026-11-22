@@ -14543,6 +14543,60 @@ class ExperienceEngine {
     return window._lusterOwnerCloudAuthPending;
   };
 
+  window.lusterChangeOwnerPassword = async function() {
+    const ownerUid='UImYxitPLoVnAuJla2wfC2Apids2';
+    if(window.lusterCloudBridge?.auth?.currentUser?.uid!==ownerUid){if(!await window.lusterOwnerCloudAuth())return;}
+    const auth=window.lusterCloudBridge?.auth;
+    if(auth?.currentUser?.uid!==ownerUid)return;
+    if(document.getElementById('luster-owner-password-change'))return;
+    const overlay=document.createElement('div');overlay.id='luster-owner-password-change';
+    overlay.style.cssText='position:fixed;inset:0;z-index:2147483647;background:#000c;display:flex;align-items:center;justify-content:center;padding:16px;overflow:auto';
+    overlay.innerHTML=`<form style="background:#15151c;color:white;border:1px solid #d4af37;border-radius:16px;padding:20px;width:min(100%,390px);max-height:90vh;overflow:auto;box-sizing:border-box;display:grid;gap:13px" autocomplete="on"><h3 style="color:#e2c45d;margin:0">تغيير كلمة سر حساب المالك</h3><p style="font-size:12px;line-height:1.7;margin:0">هذا يغيّر كلمة مرور حساب السحابة، وليس رمز فتح اللوحة. استخدم كلمة قوية مختلفة عن رمز اللوحة. بعد النجاح، حدّث النسخة القديمة في مدير كلمات السر أو الخزنة؛ لن تتحدث تلقائيًا.</p><input type="text" autocomplete="username" value="owner@luster.store" readonly aria-label="حساب المالك" style="padding:10px;background:#08080c;color:#ddd;border:1px solid #555;border-radius:8px;direction:ltr"><label style="font-size:13px">كلمة السر الجديدة<input id="owner-password-new" type="password" autocomplete="new-password" minlength="6" required style="width:100%;box-sizing:border-box;padding:12px;background:#08080c;color:white;border:1px solid #666;border-radius:8px"></label><label style="font-size:13px">أعد كتابة كلمة السر الجديدة<input id="owner-password-confirm" type="password" autocomplete="new-password" minlength="6" required style="width:100%;box-sizing:border-box;padding:12px;background:#08080c;color:white;border:1px solid #666;border-radius:8px"></label><label id="owner-password-current-wrap" style="display:none;font-size:13px">للتحقق: كلمة السر الحالية<input id="owner-password-current" type="password" autocomplete="current-password" style="width:100%;box-sizing:border-box;padding:12px;background:#08080c;color:white;border:1px solid #666;border-radius:8px"></label><div id="owner-password-change-message" role="alert" style="font-size:13px;line-height:1.7;color:#fca5a5"></div><button type="submit" style="padding:13px;background:#d4af37;color:#111;border:0;border-radius:8px;font-size:14px;font-weight:bold">حفظ كلمة السر الجديدة</button><button type="button" id="owner-password-change-cancel" style="padding:10px;background:none;border:1px solid #777;color:white;border-radius:8px">إلغاء</button></form>`;
+    document.body.appendChild(overlay);
+    const form=overlay.querySelector('form'),button=form.querySelector('button[type=submit]'),cancel=form.querySelector('#owner-password-change-cancel'),message=form.querySelector('#owner-password-change-message');
+    const clear=()=>form.querySelectorAll('input[type=password]').forEach(input=>{input.value='';});
+    cancel.onclick=()=>{clear();overlay.remove();};
+    form.onsubmit=async event=>{
+      event.preventDefault();message.textContent='';
+      const next=form.querySelector('#owner-password-new').value;
+      if(next!==form.querySelector('#owner-password-confirm').value){message.textContent='كلمتا السر الجديدتان غير متطابقتين. أعد كتابتهما.';return;}
+      if(next.length<6){message.textContent='كلمة السر تحتاج 6 حروف على الأقل. يفضّل كلمة أطول وقوية.';return;}
+      if(auth.currentUser?.uid!==ownerUid){message.textContent='جلسة المالك غير متاحة. أغلق النافذة وسجّل الدخول بحساب المالك.';return;}
+      button.disabled=true;cancel.disabled=true;button.textContent='جارٍ حفظ كلمة السر...';
+      try {
+        const currentWrap=form.querySelector('#owner-password-current-wrap');
+        if(currentWrap.style.display!=='none'){
+          const current=form.querySelector('#owner-password-current').value;
+          if(!current){message.textContent='اكتب كلمة السر الحالية لتأكيد هويتك.';return;}
+          const credential=firebase.auth.EmailAuthProvider.credential(auth.currentUser.email,current);
+          await auth.currentUser.reauthenticateWithCredential(credential);
+          form.querySelector('#owner-password-current').value='';
+        }
+        if(auth.currentUser?.uid!==ownerUid)throw {code:'owner-session-changed'};
+        await auth.currentUser.updatePassword(next);
+        clear();
+        form.replaceChildren();
+        const title=document.createElement('h3');title.textContent='تم تغيير كلمة السر بنجاح';title.style.color='#86efac';
+        const info=document.createElement('p');info.textContent='كلمة السر الجديدة هي المعتمدة الآن. حدّث نسختها في مدير كلمات السر أو الخزنة بأمان. رمز فتح اللوحة لم يتغيّر.';info.style.cssText='font-size:14px;line-height:1.8';
+        const done=document.createElement('button');done.type='button';done.textContent='تم';done.style.cssText='padding:13px;background:#d4af37;border:0;border-radius:8px;font-weight:bold';done.onclick=()=>overlay.remove();
+        form.append(title,info,done);
+      } catch(error) {
+        if(error.code==='auth/requires-recent-login'){
+          form.querySelector('#owner-password-current-wrap').style.display='block';
+          message.textContent='لأمان الحساب، اكتب كلمة السر الحالية في الخانة التي ظهرت، ثم اضغط الحفظ مرة أخرى.';
+          form.querySelector('#owner-password-current').focus();
+        } else if(['auth/wrong-password','auth/invalid-credential','auth/invalid-login-credentials'].includes(error.code))message.textContent='كلمة السر الحالية غير صحيحة. لم يتم تأكيد التغيير.';
+        else if(error.code==='auth/weak-password'||error.code==='auth/password-does-not-meet-requirements')message.textContent='كلمة السر لا تحقق شروط الأمان. اختر كلمة أقوى وأطول ثم أعد المحاولة.';
+        else if(error.code==='auth/too-many-requests')message.textContent='محاولات كثيرة. انتظر قبل المحاولة مرة أخرى.';
+        else if(error.code==='auth/network-request-failed')message.textContent='تعذر تأكيد التغيير بسبب الاتصال. تحقق من تسجيل الدخول قبل إعادة تغيير كلمة السر.';
+        else message.textContent='تعذر تأكيد تغيير كلمة السر. تحقق من اتصالك ومن جلسة المالك ثم أعد المحاولة.';
+      } finally {
+        if(button.isConnected){button.disabled=false;button.textContent='حفظ كلمة السر الجديدة';}
+        if(cancel.isConnected)cancel.disabled=false;
+      }
+    };
+  };
+
   window.lusterCatalogPublishNotice=function(message,success=false){
     document.getElementById('luster-catalog-publish-notice')?.remove();
     if(success){window.showToast('أكدت السحابة حفظ الكتالوج. وصوله للأجهزة الأخرى يحتاج التحقق من المزامنة.', 'success');return;}
@@ -17973,6 +18027,7 @@ class LusterOwnerDashboard {
               <span id="owner-cloud-connection-status" role="status">جارٍ التحقق من الحساب...</span>
             </div>
             <button type="button" id="btn-owner-cloud-signin" style="display:block!important;visibility:visible!important;padding:11px 13px;border:1px solid #e2c45d;background:#d4af37;color:#111827;border-radius:8px;font-size:12px;font-weight:900;cursor:pointer;">تسجيل دخول المالك</button>
+            <button type="button" id="btn-owner-cloud-password" style="display:block!important;visibility:visible!important;padding:11px 13px;border:1px solid #e2c45d;background:#182235;color:#fcd34d;border-radius:8px;font-size:12px;font-weight:900;cursor:pointer;">تغيير كلمة السر</button>
           </div>
 
           <!-- Continuous Alarm Alert Banner -->
@@ -18224,6 +18279,8 @@ class LusterOwnerDashboard {
     }
 
     this.updateOwnerCloudStatus(modal);
+    const passwordChange=modal.querySelector('#btn-owner-cloud-password');
+    if(passwordChange)passwordChange.onclick=()=>window.lusterChangeOwnerPassword();
     const cloudSignIn=modal.querySelector('#btn-owner-cloud-signin');
     if(cloudSignIn)cloudSignIn.onclick=async()=>{
       cloudSignIn.disabled=true;
