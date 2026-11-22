@@ -7004,8 +7004,8 @@ class MotionEngine {
 
 // --- Module: store.js ---
 const DEFAULT_LUSTER_STATE = {
-  "version": 100,
-  "lastUpdated": "2026-10-05T23:15:15.010Z",
+  "version": 1795340720000,
+  "lastUpdated": "2026-11-22T09:46:00.000Z",
   "brand": {
     "name": "LUSTER",
     "subtitle": "Luxury through Motion",
@@ -9991,6 +9991,13 @@ class LusterCloudBridge {
 
     if (!savedState) return defaultState;
 
+    // A newly deployed bundle always wins over a stale cached copy
+    const savedVer = savedState.version === 20261012 ? 100 : (Number(savedState.version) || 0);
+    if ((Number(defaultState.version) || 0) > savedVer) {
+      try { localStorage.removeItem('luster_cached_state'); } catch(e) {}
+      return defaultState;
+    }
+
     // Respect owner deletions while protecting against null products array
     const delSet = getDeletedProductIdsSet(savedState);
     if (!savedState.products || !Array.isArray(savedState.products)) {
@@ -10692,7 +10699,7 @@ class LusterCloudBridge {
 
     // Customer phones ALWAYS sync to the exact latest cloud state from the Owner!
     const isVerifiedOwnerDev = Boolean(typeof localStorage !== 'undefined' && (localStorage.getItem('luster_owner_device_verified') === 'true' || sessionStorage.getItem('luster_owner_authenticated') === 'true'));
-    if (cloudState && cloudVer > 100 && (cloudVer > localVer || (!isOwnerModalOpen && cloudVer !== this.lastSyncedVersion) || (!isVerifiedOwnerDev && cloudVer !== localVer))) {
+    if (cloudState && cloudVer > 100 && cloudVer > localVer) {
       const delSet = getDeletedProductIdsSet(cloudState);
       if (isVerifiedOwnerDev && Array.isArray(this.state?.deletedProductIds)) {
         this.state.deletedProductIds.forEach(id => delSet.add(id));
