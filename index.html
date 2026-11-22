@@ -14516,8 +14516,9 @@ class ExperienceEngine {
   // enables it (security.ownerAuthEnabled), sign the device into Firebase with
   // the owner email account so Firestore rules accept writes from this device only.
   window.lusterOwnerCloudAuth = async function() {
-    const auth=window.lusterCloudBridge?.auth;
-    if(auth?.currentUser?.uid==='UImYxitPLoVnAuJla2wfC2Apids2')return true;
+    let auth=window.lusterCloudBridge?.auth;
+    if(!auth && window.firebase?.auth){try{auth=firebase.auth();if(window.lusterCloudBridge)window.lusterCloudBridge.auth=auth;}catch(e){}}
+    if(auth?.currentUser?.uid==='UImYxitPLoVnAuJla2wfC2Apids2'){try{await auth.setPersistence('local');}catch(e){}return true;}
     if(!auth){window.showToast('خدمة تسجيل الدخول غير جاهزة. أعد المحاولة بعد تحميل الصفحة.', 'error');return false;}
     if(window._lusterOwnerCloudAuthPending)return window._lusterOwnerCloudAuthPending;
     window._lusterOwnerCloudAuthPending=new Promise(resolve=>{
@@ -14530,6 +14531,7 @@ class ExperienceEngine {
       overlay.querySelector('form').onsubmit=async event=>{
         event.preventDefault();const button=overlay.querySelector('button[type=submit]');button.disabled=true;
         try {
+          await auth.setPersistence('local');
           await auth.signInWithEmailAndPassword(overlay.querySelector('#owner-cloud-email').value.trim(),overlay.querySelector('#owner-cloud-password').value);
           if(auth.currentUser?.uid!=='UImYxitPLoVnAuJla2wfC2Apids2'){await auth.signOut();throw new Error('wrong-owner');}
           window.lusterCloudBridge._nextOrdersReadAt=0;finish(true);
@@ -17919,6 +17921,16 @@ class LusterOwnerDashboard {
     cancelBtn.onclick = () => { overlay.style.display = 'none'; };
   }
 
+  updateOwnerCloudStatus(modal=null) {
+    modal=modal || document.getElementById('luster-owner-dashboard-modal');
+    const status=modal?.querySelector('#owner-cloud-connection-status');
+    const button=modal?.querySelector('#btn-owner-cloud-signin');
+    const auth=window.lusterCloudBridge?.auth;
+    const connected=auth?.currentUser?.uid==='UImYxitPLoVnAuJla2wfC2Apids2';
+    if(status){status.textContent=connected?'متصل بحساب المالك. قراءة البيانات والنشر لهما حالة منفصلة.':(!auth?'خدمة تسجيل الدخول غير جاهزة بعد. أعد المحاولة بعد تحميل الصفحة.':'غير مسجّل بحساب المالك. اضغط الزر لتسجيل الدخول.');status.style.color=connected?'#86efac':'#fcd34d';}
+    if(button)button.textContent=connected?'التحقق من اتصال المالك':'تسجيل دخول المالك';
+  }
+
   renderDashboardModal() {
     let modal = document.getElementById('luster-owner-dashboard-modal');
     if (!modal) {
@@ -17951,6 +17963,14 @@ class LusterOwnerDashboard {
               <button id="btn-owner-suite-lock" class="header-btn" style="padding: 5px 8px; font-size: 12px; color: #FFA726; border-color: #FFA726; font-weight: 800; white-space: nowrap;" title="قفل اللوحة">🔒</button>
               <button class="drawer-close" style="width: 28px; height: 28px; font-size: 14px; border-radius: 50%;">✕</button>
             </div>
+          </div>
+
+          <div id="owner-cloud-connection-card" style="background:#0f172a;border-bottom:1px solid #64748b;padding:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex-shrink:0;">
+            <div style="flex:1;min-width:165px;font-size:12px;line-height:1.7;color:#e2e8f0;">
+              <strong style="display:block;color:#e2c45d">اتصال حساب المالك بالسحابة</strong>
+              <span id="owner-cloud-connection-status" role="status">جارٍ التحقق من الحساب...</span>
+            </div>
+            <button type="button" id="btn-owner-cloud-signin" style="display:block!important;visibility:visible!important;padding:11px 13px;border:1px solid #e2c45d;background:#d4af37;color:#111827;border-radius:8px;font-size:12px;font-weight:900;cursor:pointer;">تسجيل دخول المالك</button>
           </div>
 
           <!-- Continuous Alarm Alert Banner -->
@@ -18201,6 +18221,12 @@ class LusterOwnerDashboard {
       }
     }
 
+    this.updateOwnerCloudStatus(modal);
+    const cloudSignIn=modal.querySelector('#btn-owner-cloud-signin');
+    if(cloudSignIn)cloudSignIn.onclick=async()=>{
+      cloudSignIn.disabled=true;
+      try{const connected=await window.lusterOwnerCloudAuth();this.updateOwnerCloudStatus(modal);if(connected){window.showToast('حساب المالك متصل. تعطل قراءة البيانات أو النشر حالة منفصلة عن تسجيل الدخول.', 'success');this.checkPendingNewOrders();}}finally{cloudSignIn.disabled=false;}
+    };
     modal.classList.add('active');
     this.checkPendingNewOrders();
     this.updateAlarmState();
