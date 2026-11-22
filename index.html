@@ -7009,7 +7009,7 @@ const DEFAULT_LUSTER_STATE = {
     "language": "ar",
     "phone": "01013376681",
     "whatsapp": "96565704145",
-    "appShareUrl": "https://almohandis-systems.github.io/luster-store/"
+    "appShareUrl": "https://almohandis-systems.github.io/luster/"
   },
   "phoneManager": {
     "numbers": [
@@ -11804,7 +11804,7 @@ function getLusterAppCanonicalUrl() {
       }
     }
   } catch (e) {}
-  return 'https://almohandis-systems.github.io/luster-store/';
+  return 'https://almohandis-systems.github.io/luster/';
 }
 window.getLusterAppCanonicalUrl = getLusterAppCanonicalUrl;
 
@@ -12061,7 +12061,7 @@ class ExperienceEngine {
     const currentInvites = refStatus.count || 0;
     const targetInvites = challenge.targetInvites || 10;
     const progressPercent = Math.min(100, Math.round((currentInvites / targetInvites) * 100));
-    const baseUrl = window.getLusterAppCanonicalUrl ? window.getLusterAppCanonicalUrl() : 'https://almohandis-systems.github.io/luster-store/';
+    const baseUrl = window.getLusterAppCanonicalUrl ? window.getLusterAppCanonicalUrl() : 'https://almohandis-systems.github.io/luster/';
     const refUrl = baseUrl.includes('?') ? `${baseUrl}&ref=${refCode}` : `${baseUrl}?ref=${refCode}`;
 
     containerEl.innerHTML = `
@@ -19922,7 +19922,7 @@ class LusterOwnerDashboard {
       ]
     };
 
-    const appShareUrl = state?.brand?.appShareUrl || (window.getLusterAppCanonicalUrl ? window.getLusterAppCanonicalUrl() : 'https://almohandis-systems.github.io/luster-store/');
+    const appShareUrl = state?.brand?.appShareUrl || (window.getLusterAppCanonicalUrl ? window.getLusterAppCanonicalUrl() : 'https://almohandis-systems.github.io/luster/');
 
     container.innerHTML = `
       <div style="display:flex; flex-direction:column; gap:16px;">
@@ -19943,7 +19943,7 @@ class LusterOwnerDashboard {
             هذا الرابط المعتمد يُرسل تلقائياً للعملاء عند نسخ رابط الإحالة أو مشاركة التطبيق لضمان فتحه وتثبيته مباشرة دون خطأ 404.
           </div>
           <div style="display:flex; gap:8px; align-items:center;">
-            <input type="url" id="wheel-app-share-url" value="${appShareUrl}" placeholder="https://almohandis-systems.github.io/luster-store/" style="flex:1; background:var(--bg-card); color:#FFF; border:1px solid var(--border-gold); padding:10px; border-radius:var(--radius-sm); font-size:13px; font-family:monospace; direction:ltr;">
+            <input type="url" id="wheel-app-share-url" value="${appShareUrl}" placeholder="https://almohandis-systems.github.io/luster/" style="flex:1; background:var(--bg-card); color:#FFF; border:1px solid var(--border-gold); padding:10px; border-radius:var(--radius-sm); font-size:13px; font-family:monospace; direction:ltr;">
             <button type="button" id="btn-copy-app-url" class="btn-luxury-outline" style="padding:9px 14px; font-size:12px; white-space:nowrap;">
               نسخ الرابط 📋
             </button>
