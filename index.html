@@ -114,7 +114,7 @@
         const currentPath = window.location.pathname;
         const basePath = currentPath.substring(0, currentPath.lastIndexOf('/') + 1) || './';
         const startUrl = './' + (currentPath.substring(currentPath.lastIndexOf('/') + 1) || 'index.html');
-        
+
         const manifestObj = {
           name: "LUSTER Visual Commerce",
           short_name: "LUSTER",
@@ -181,9 +181,9 @@
   <link rel="icon" type="image/png" sizes="512x512" href="assets/icon-512.png">
 
   <!-- Core Stylesheets -->
-  
-  
-  
+
+
+
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Cinzel:wght@600;700;900&family=Outfit:wght@400;600;700;800;900&display=swap" media="print" onload="this.media='all'">
 <style>
 
@@ -3329,7 +3329,7 @@ body.studio-mode #luster-chat-fab,
           <span class="product-price">380 ج.م</span>
           <span class="product-price-old">450 ج.م</span>
         </div>
-        
+
         <div class="product-actions">
           <button class="btn-add-cart" data-id="prod_1" onclick="window.lusterAddToCart && window.lusterAddToCart('prod_1', event)">
             <span>🛒</span> أضف للسلة
@@ -3388,7 +3388,7 @@ body.studio-mode #luster-chat-fab,
           <span class="product-price">240 ج.م</span>
           <span class="product-price-old">290 ج.م</span>
         </div>
-        
+
         <div class="product-actions">
           <button class="btn-add-cart" data-id="prod_2" onclick="window.lusterAddToCart && window.lusterAddToCart('prod_2', event)">
             <span>🛒</span> أضف للسلة
@@ -3444,7 +3444,7 @@ body.studio-mode #luster-chat-fab,
           <span class="product-price">140 ج.م</span>
           <span class="product-price-old">175 ج.م</span>
         </div>
-        
+
         <div class="product-actions">
           <button class="btn-add-cart" data-id="prod_3" onclick="window.lusterAddToCart && window.lusterAddToCart('prod_3', event)">
             <span>🛒</span> أضف للسلة
@@ -3494,7 +3494,7 @@ body.studio-mode #luster-chat-fab,
           <span class="product-price">190 ج.م</span>
           <span class="product-price-old">230 ج.م</span>
         </div>
-        
+
         <div class="product-actions">
           <button class="btn-add-cart" data-id="prod_4" onclick="window.lusterAddToCart && window.lusterAddToCart('prod_4', event)">
             <span>🛒</span> أضف للسلة
@@ -3539,7 +3539,7 @@ body.studio-mode #luster-chat-fab,
           <span class="product-price">95 ج.م</span>
           <span class="product-price-old">120 ج.م</span>
         </div>
-        
+
         <div class="product-actions">
           <button class="btn-add-cart" data-id="prod_5" onclick="window.lusterAddToCart && window.lusterAddToCart('prod_5', event)">
             <span>🛒</span> أضف للسلة
@@ -3589,7 +3589,7 @@ body.studio-mode #luster-chat-fab,
           <span class="product-price">160 ج.م</span>
           <span class="product-price-old">200 ج.م</span>
         </div>
-        
+
         <div class="product-actions">
           <button class="btn-add-cart" data-id="prod_6" onclick="window.lusterAddToCart && window.lusterAddToCart('prod_6', event)">
             <span>🛒</span> أضف للسلة
@@ -3681,7 +3681,7 @@ body.studio-mode #luster-chat-fab,
     </div>
   </div>
 
-  
+
   <!-- 12. LUSTER AI Customer Assistant Drawer (شات لاستر - خبير المنظفات والعناية بالمنزل) -->
   <div id="drawer-luster-chat" class="luster-drawer-overlay">
     <div class="luster-drawer" style="max-width: 580px; width: 100%; height: 86vh; max-height: 86dvh; display: flex; flex-direction: column;">
@@ -3798,7 +3798,7 @@ body.studio-mode #luster-chat-fab,
     </div>
   </div>
 
-    
+
   <!-- Customer App Installation Modal -->
   <div id="luster-install-guide-modal" class="luster-drawer-overlay">
     <div class="luster-drawer" style="max-width: 480px; text-align: center;">
@@ -3919,7 +3919,7 @@ body.studio-mode #luster-chat-fab,
     </div>
   </div>
 
-  
+
   <!-- 16. Customer Orders & Tracking Drawer -->
   <div id="drawer-orders" class="luster-drawer-overlay">
     <div class="luster-drawer" style="max-width: 600px;">
@@ -3949,8 +3949,8 @@ body.studio-mode #luster-chat-fab,
   </footer>
 
   <!-- Application Modules -->
-  
-  
+
+
 <script>
 // Global Direct Action Helpers (Instant Response)
 window.lusterAddToCart = function(productId, event) {
@@ -9930,7 +9930,7 @@ class LusterCloudBridge {
       const pending=JSON.parse(localStorage.getItem(key)||'{}');
       for (const [id,ping] of Object.entries(pending)) {
         try {
-          const r=await fetch('https://ntfy.sh/luster_order_pings_almohandis_v1',{method:'POST',headers:{'Content-Type':'text/plain; charset=utf-8'},body:JSON.stringify(ping),signal:AbortSignal.timeout(8000)});
+          const r=await fetch('https://ntfy.sh/luster_orders_3d555a1583e4734a8fbeb55841f1de94aae3',{method:'POST',headers:{'Content-Type':'text/plain; charset=utf-8','Title':'LUSTER: new order alert','Priority':'high','Tags':'bell'},body:JSON.stringify(ping),signal:AbortSignal.timeout(8000)});
           if (r.ok) { const latest=JSON.parse(localStorage.getItem(key)||'{}');delete latest[id];localStorage.setItem(key,JSON.stringify(latest)); }
         } catch(e) {}
       }
@@ -9944,12 +9944,12 @@ class LusterCloudBridge {
       if (!owner || document.visibilityState!=='visible') return;
       if (!this._ownerPingCursor) this._ownerPingCursor=Number(localStorage.getItem('luster_owner_ping_cursor_v1')) || (Date.now()-60000);
       if (!this._ownerPingEs && typeof EventSource!=='undefined') {
-        this._ownerPingEs=new EventSource('https://ntfy.sh/luster_order_pings_almohandis_v1/sse');
+        this._ownerPingEs=new EventSource('https://ntfy.sh/luster_orders_3d555a1583e4734a8fbeb55841f1de94aae3/sse');
         this._ownerPingEs.onmessage=event=>{try{const env=JSON.parse(event.data);if(env.event==='message')this.receiveOwnerPing(JSON.parse(env.message));}catch(e){}};
       }
       try {
         const since=Math.max(1,Math.floor(this._ownerPingCursor/1000)-1);
-        const res=await fetch('https://ntfy.sh/luster_order_pings_almohandis_v1/json?poll=1&since='+since+'&_='+Date.now(),{cache:'no-store',signal:AbortSignal.timeout(8000)});
+        const res=await fetch('https://ntfy.sh/luster_orders_3d555a1583e4734a8fbeb55841f1de94aae3/json?poll=1&since='+since+'&_='+Date.now(),{cache:'no-store',signal:AbortSignal.timeout(8000)});
         if(res.ok) for(const line of (await res.text()).trim().split('\n')) {
           if(!line)continue;try{const env=JSON.parse(line);if(env.event==='message')this.receiveOwnerPing(JSON.parse(env.message));}catch(e){}
         }
@@ -10002,7 +10002,7 @@ class LusterCloudBridge {
         localStorage.removeItem('luster_custom_firebase_url');
         this.customFirebaseUrl = '';
       }
-      
+
     this.initRealtimeSubscriptions();
     } catch(e) {}
   }
@@ -10497,7 +10497,10 @@ class LusterCloudBridge {
   }
 
   async fetchCloudOrders() {
-    if (this._ordersRealtimeHealthy && this.orders.length) return;
+    if (this._ordersRealtimeHealthy && this._ordersInitialLoadComplete) return;
+    if(this._ordersReadInFlight || Date.now() < (this._nextOrdersReadAt||0))return this.orders;
+    if(this.auth?.currentUser?.uid!=='UImYxitPLoVnAuJla2wfC2Apids2')return;
+    this._ordersReadInFlight=true;this._nextOrdersReadAt=Date.now()+300000;
     let cloudOrders = [];
     const statusUpdatesMap = new Map();
     const tasks = [];
@@ -10509,16 +10512,18 @@ class LusterCloudBridge {
       let page = '';
       do {
         const res = await fetch(`${baseUrl}/luster_orders${keyParam}&pageSize=100${page ? '&pageToken='+encodeURIComponent(page) : ''}`, {headers:{Authorization:'Bearer '+token},signal:AbortSignal.timeout(8000)});
-        if (!res.ok) return;
+        if (!res.ok) {this._nextOrdersReadAt=Date.now()+(res.status===429?900000:300000);return;}
         const data = await res.json();
         for (const doc of data.documents || []) {
           try { const order = JSON.parse(doc.fields?.jsonPayload?.stringValue || '{}'); if (order.orderId) cloudOrders.push(order); } catch(e) {}
         }
         page = data.nextPageToken || '';
       } while(page);
+      this._ordersInitialLoadComplete=true;
     })());
 
     await Promise.allSettled(tasks);
+    this._ordersReadInFlight=false;
 
     // 5. Merge all cloud orders with local orders (Deduplicating by orderId & syncing status across all owner phones)
     const mergedMap = new Map();
@@ -10604,6 +10609,7 @@ class LusterCloudBridge {
           jsonPayload: { stringValue: cleanJson }
         }
       };
+      if(collectionName==='luster_orders' && payloadObj.createdAt)body.fields.createdAt={stringValue:payloadObj.createdAt};
       const res = await safeCloudFetch(url, {
         method: 'PATCH',
         headers,
@@ -10674,10 +10680,6 @@ class LusterCloudBridge {
         const cloudSafeState = await this.prepareStateForCloudSync(this.state);
 
         await Promise.allSettled([
-          safeCloudFetch(`https://kvdb.io/4y9h8K5P7vG6jN3x2w/state_${this.storeId}`, {
-            method: 'POST',
-            body: JSON.stringify(cloudSafeState)
-          }),
           this.firestoreRestSetDoc('luster_store', 'catalog_sync', cloudSafeState),
           this.db ? Promise.race([
             this.db.collection('luster_store').doc('catalog').set(cloudSafeState),
@@ -10726,19 +10728,6 @@ class LusterCloudBridge {
         }).catch(() => {})
       );
     }
-
-    // 3. KVDB.io Central Multi-Device Store
-    tasks.push(
-      safeCloudFetch(`https://kvdb.io/4y9h8K5P7vG6jN3x2w/state_${this.storeId}`).then(async kvRes => {
-        if (kvRes && kvRes.ok) {
-          const kvData = await kvRes.json();
-          if (kvData && (kvData.products || kvData.brand || kvData.categories || kvData.customTexts)) {
-            if (kvData.version === 20261012) kvData.version = 100;
-            candidates.push(kvData);
-          }
-        }
-      }).catch(() => {})
-    );
 
     await Promise.allSettled(tasks);
 
@@ -11639,7 +11628,10 @@ class LusterCloudBridge {
 
   // Offload ALL images and videos > 4KB out of catalog JSON so catalog JSON is ALWAYS < 20KB!
   async prepareStateForCloudSync(rawState) {
-    const cloned = JSON.parse(JSON.stringify(rawState || this.state || {}));
+    const source=rawState || this.state || {};
+    const publicKeys=['version','lastUpdated','brand','phoneManager','logo','theme','motion','hero','dockBar','paymentSettings','loyalty','referralChallenge','gamification','coupons','categories','products','stories','campaigns','developerInfo','aiAdvisor','media','uiVisibility','customTexts','deletedProductIds','ownerClearedCatalog','shippingSettings','cartSettings','lighting','flashBanner','socialLinks','aiChatInstructions','expiredCoupons'];
+    const cloned=JSON.parse(JSON.stringify(Object.fromEntries(publicKeys.filter(k=>Object.hasOwn(source,k)).map(k=>[k,source[k]]))));
+    for(const product of cloned.products || []) for(const key of ['costPrice','unitCost','purchasePrice','supplier','supplierPhone','supplierInfo','profit','grossProfit','margin','internalNotes'])delete product[key];
     const uploadPromises = [];
 
     const offloadDataField = (val, prefix) => {
@@ -11916,6 +11908,9 @@ class LusterStore {
     if(state.paymentSettings?.methods?.cash)state.paymentSettings.methods.cash.enabled=true;
     for(const product of state.products || []) if(product.category==='insects') product.descriptionAr="مبيد منزلي. راجع اسم الحشرة المستهدفة وطريقة الاستخدام والتحذيرات المكتوبة على العبوة قبل الاستعمال. يُحفظ بعيدًا عن الأطفال والحيوانات الأليفة والطعام. لا تخلطه مع منظفات أو مواد أخرى، ولا تفترض أنه مناسب للحساسية أو للأسطح الملامسة للطعام.";
     if(state.paymentSettings){state.paymentSettings.partialPayment={enabled:false,depositPercentage:0,minimumOrderAmount:0,depositPaymentMethods:[],termsAr:'لا توجد دفعة مقدمة مطلوبة',termsEn:'No deposit required'};}
+    const repairedVideo='https://almohandis-systems.github.io/luster-store/media/video_laundry.mp4?v=20261122fixed';
+    for(const story of state.stories || [])if(story.id==='story_video_laundry'){story.videoUrl=repairedVideo;for(const item of story.media||[])if(item.type==='video')item.url=repairedVideo;}
+    if(state.media?.video_laundry)state.media.video_laundry.url=repairedVideo;
     return state;
   }
 
@@ -12515,7 +12510,7 @@ class CommerceEngine {
 
     containerEl.innerHTML = `
       <div style="display:flex; flex-direction:column; gap:16px;">
-        
+
         <!-- Header Notice (Points are NOT cash) -->
         <div style="background:linear-gradient(135deg, #1C1B24 0%, #2A2838 100%); border:2px solid var(--accent-gold); border-radius:var(--radius-lg); padding:20px; text-align:center; box-shadow:0 10px 30px rgba(0,0,0,0.5);">
           <div style="font-size:13px; font-weight:800; color:var(--text-muted); margin-bottom:4px;">محفظة مزايا وعضوية LUSTER</div>
@@ -13509,7 +13504,7 @@ class CommerceEngine {
       const isPartial = false;
       const deposit = 0;
       const remaining = isPartial ? Math.round(order.totalAmount * 0.8) : 0;
-      
+
       const paymentLabels = {
         vodafone: 'فودافون كاش 💳',
         instapay: 'إنستاباي InstaPay ⚡',
@@ -13584,7 +13579,7 @@ class CommerceEngine {
               <span style="color:var(--accent-gold);">${payLabel}</span>
             </div><div style="font-size:12px;color:#FBBF24">حالة الدفع: ${order.paymentStatus === 'paid' ? 'تم تأكيد استلام المبلغ' : 'لم يتم تأكيد استلام أي مبلغ'}
             </div>
-            
+
           </div>
 
           <div style="display:flex; gap:8px; margin-top:4px; flex-wrap:wrap;">
@@ -14298,7 +14293,7 @@ class ExperienceEngine {
         } catch(e) {}
         if (!Array.isArray(currentHist.wonPrizeIds)) currentHist.wonPrizeIds = [];
 
-        const currentAllowed = requireOrder 
+        const currentAllowed = requireOrder
           ? ((confirmedOrdersCount * spinsPerOrder) + (currentHist.bonusSpins || 0))
           : (freeSpins + (confirmedOrdersCount * spinsPerOrder) + (currentHist.bonusSpins || 0));
 
@@ -16446,7 +16441,7 @@ class DeveloperSuperAdmin {
         </div>
 
         <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:12px;">
-          
+
           <!-- Card 1: PWA Cache Purge -->
           <div style="background:#13131A; border:1px solid rgba(56, 189, 248, 0.3); border-radius:var(--radius-md); padding:16px; display:flex; flex-direction:column; justify-content:space-between; gap:12px;">
             <div>
@@ -17475,8 +17470,8 @@ class OwnerAlarmEngine {
       <div style="display:flex; align-items:center; gap:10px;">
         <span style="font-size:26px;">🚨</span>
         <div>
-          <div style="font-size:15px; font-weight:900; color:#FEF08A;">إنذار طلب جديد! صوت التنبيه يعمل باستمرار بصوت عالٍ حتى الاستلام</div>
-          <div style="font-size:11px; color:#FFF; opacity:0.95;">يوجد طلب جديد بانتظار استلام واعتماد المالك — اضغط على الزر لإيقاف الصوت فوراً</div>
+          <div style="font-size:15px; font-weight:900; color:#FEF08A;">تنبيه طلب جديد. اضغط تم الاستلام لإيقاف الرنين</div>
+          <div style="font-size:11px; color:#FFF; opacity:0.95;">افتح تفاصيل الطلب للتحقق منه. التنبيه وحده لا يؤكد بيانات الطلب.</div>
         </div>
       </div>
       <div style="display:flex; gap:8px; flex-wrap:wrap;">
@@ -17678,6 +17673,7 @@ class LusterOwnerDashboard {
 
   listenToLiveOrders() {
     this.store.on('NEW_ORDER_BROADCAST', (payload) => {
+      if(payload?.order && !this.alarmOrderIsUnacknowledged(payload.order))return;
       this.pendingNewOrdersCount++;
       this.updateAlarmState();
       const modal = document.getElementById('luster-owner-dashboard-modal');
@@ -17696,7 +17692,7 @@ class LusterOwnerDashboard {
       if (res && res.ok) {
         const data = await res.json();
         const orders = data.orders || [];
-        const newOrders = orders.filter(o => o.statusCode === 'new');
+        const newOrders = orders.filter(o => this.alarmOrderIsUnacknowledged(o));
         const undeliveredOrders = orders.filter(o => o.statusCode !== 'delivered' && o.statusCode !== 'cancelled');
         this.pendingNewOrdersCount = newOrders.length;
         this.undeliveredOrdersCount = undeliveredOrders.length;
@@ -17715,7 +17711,7 @@ class LusterOwnerDashboard {
     } catch (e) {
       try {
         const local = JSON.parse(localStorage.getItem('luster_orders') || '[]');
-        const newOrders = local.filter(o => o.statusCode === 'new');
+        const newOrders = local.filter(o => this.alarmOrderIsUnacknowledged(o));
         const undeliveredOrders = local.filter(o => o.statusCode !== 'delivered' && o.statusCode !== 'cancelled');
         this.pendingNewOrdersCount = newOrders.length;
         this.undeliveredOrdersCount = undeliveredOrders.length;
@@ -17734,7 +17730,7 @@ class LusterOwnerDashboard {
         box.style.cssText='position:fixed;top:12px;left:12px;right:12px;z-index:2147483647;background:#7f1d1d;color:white;padding:18px;border:2px solid #fde68a;border-radius:12px;font-size:14px;line-height:1.8;text-align:center';
         box.innerHTML='<strong>🔔 تنبيه طلب جديد</strong><div>هذا تنبيه عام فقط. تفاصيل الطلب قد تتأخر حتى عودة قراءة السحابة. التنبيه ليس تأكيدًا مستقلًا لبيانات الطلب.</div><button type="button" id="luster-ack-generic-ping" style="padding:14px;background:#fde68a;color:#111;border:0;border-radius:8px;font-weight:bold">✓ تم استلام التنبيه، إيقاف الرنين</button>';
         document.body.appendChild(box);
-        box.querySelector('button').onclick=()=>{localStorage.setItem('luster_unacked_order_pings_v1','{}');box.remove();this.alarmEngine.stopAlarm();if(this.pendingNewOrdersCount>0)this.updateAlarmState();};
+        box.querySelector('button').onclick=()=>this.acknowledgeAllNewOrders();
       }
       this.updateAlarmBadgeUI(true);
     } else if(!hasNew) { this.alarmEngine.stopAlarm();document.getElementById('luster-generic-order-ping')?.remove();this.updateAlarmBadgeUI(false); }
@@ -18186,47 +18182,32 @@ class LusterOwnerDashboard {
     this.renderTabContent(modal.querySelector('.owner-suite-body'));
   }
 
-  async acknowledgeAllNewOrders() {
-    localStorage.setItem('luster_unacked_order_pings_v1','{}');
-    document.getElementById('luster-generic-order-ping')?.remove();
-    this.alarmEngine.stopAlarm();
-    try {
-      const res = await fetch('/api/orders');
-      if (res.ok) {
-        const data = await res.json();
-        const newOrders = (data.orders || []).filter(o => o.statusCode === 'new');
-        for (const o of newOrders) {
-          await fetch('/api/orders/status', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              orderId: o.orderId,
-              statusCode: 'received',
-              actor: 'المالك (Owner)',
-              reason: 'اعتماد واستلام فوري عبر شريط التنبيه'
-            })
-          });
-        }
-      }
-    } catch (e) {
-      try {
-        const local = JSON.parse(localStorage.getItem('luster_orders') || '[]');
-        local.forEach(o => {
-          if (o.statusCode === 'new') {
-            o.statusCode = 'received';
-            o.status = 'تم الاستلام';
-            o.receivedAt = new Date().toISOString();
-          }
-        });
-        localStorage.setItem('luster_orders', JSON.stringify(local));
-      } catch (err) {}
-    }
+  alarmOrderIsUnacknowledged(order) {
+    if(order.statusCode!=='new')return false;
+    let ids=[];try{ids=JSON.parse(localStorage.getItem('luster_acknowledged_alarm_orders_v1')||'[]');}catch(e){}
+    if(ids.includes(order.orderId))return false;
+    const ackAt=Number(localStorage.getItem('luster_alarm_ack_at_v1')||0);
+    const created=Date.parse(order.createdAt||'');
+    return !Number.isFinite(created)||created>ackAt;
+  }
 
-    this.pendingNewOrdersCount = 0;
+  async acknowledgeAllNewOrders() {
+    // Acknowledge the alert only. Never claim an unread order changed status remotely.
+    localStorage.setItem('luster_unacked_order_pings_v1','{}');
+    const ackTime=Date.now();
+    localStorage.setItem('luster_alarm_ack_at_v1',String(ackTime));
+    if(window.lusterCloudBridge)window.lusterCloudBridge._ownerPingCursor=ackTime;
+    localStorage.setItem('luster_owner_ping_cursor_v1',String(ackTime));
+    try {
+      const orders=[...(window.lusterCloudBridge?.orders||[]),...JSON.parse(localStorage.getItem('luster_orders')||'[]')];
+      const ids=JSON.parse(localStorage.getItem('luster_acknowledged_alarm_orders_v1')||'[]');
+      localStorage.setItem('luster_acknowledged_alarm_orders_v1',JSON.stringify([...new Set([...ids,...orders.filter(o=>o.statusCode==='new').map(o=>o.orderId)])].slice(-10000)));
+    } catch(e){}
+    document.getElementById('luster-generic-order-ping')?.remove();
+    this.pendingNewOrdersCount=0;
+    this.alarmEngine.stopAlarm();
     this.updateAlarmState();
-    window.showToast('تم استلام جميع الطلبات الجديدة وتوقف رنين الإنذار بنجاح ✓', 'success');
-    const modal = document.getElementById('luster-owner-dashboard-modal');
-    if (modal) this.renderTabContent(modal.querySelector('.owner-suite-body'));
+    window.showToast('تم استلام التنبيه وإيقاف الرنين. حالة الطلب لا تتغير إلا من أزرار الطلب نفسه.', 'success');
   }
 
   renderTabContent(container) {
@@ -18264,7 +18245,7 @@ class LusterOwnerDashboard {
     let bridgeOrders = (window.lusterCloudBridge && Array.isArray(window.lusterCloudBridge.orders)) ? window.lusterCloudBridge.orders : [];
     let localOrders = [];
     try { localOrders = JSON.parse(localStorage.getItem('luster_orders') || '[]'); } catch(e) {}
-    
+
     // Merge bridge and local orders
     const ordersMap = new Map();
     bridgeOrders.forEach(o => { if (o && o.orderId) ordersMap.set(o.orderId, o); });
@@ -18296,7 +18277,7 @@ class LusterOwnerDashboard {
         }).catch(() => {});
     }
 
-    const newOrders = orders.filter(o => o.statusCode === 'new');
+    const newOrders = orders.filter(o => this.alarmOrderIsUnacknowledged(o));
     this.pendingNewOrdersCount = newOrders.length;
     this.updateAlarmState();
 
@@ -18366,7 +18347,7 @@ class LusterOwnerDashboard {
               <label style="font-size:11px; color:var(--text-muted); display:block; margin-bottom:4px;">إجمالي المبلغ (ج.م) *</label>
               <input type="number" id="manual-order-total" style="width:100%; background:var(--bg-card); color:#50C878; font-weight:900; border:1px solid rgba(255,255,255,0.15); padding:8px; border-radius:var(--radius-sm); font-size:13px;">
             </div>
-            
+
             <div>
               <label style="font-size:11px; color:var(--text-muted); display:block; margin-bottom:4px;">مندوب التوصيل المعين</label>
               <select id="manual-order-courier" style="width:100%; background:var(--bg-card); color:#FFF; border:1px solid rgba(255,255,255,0.15); padding:8px; border-radius:var(--radius-sm); font-size:12px;">
@@ -18398,7 +18379,7 @@ class LusterOwnerDashboard {
       orders.forEach(order => {
         const isNew = order.statusCode === 'new';
         const dateStr = new Date(order.createdAt).toLocaleDateString('ar-EG', { year:'numeric', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
-        
+
         const statusColors = {
           'new': { bg: '#991B1B', text: '#FEF08A', label: 'جديد (بانتظار الاستلام 🚨)' },
           'received': { bg: '#1E3A8A', text: '#93C5FD', label: 'تم الاستلام' },
@@ -18623,7 +18604,7 @@ class LusterOwnerDashboard {
         const unitPrice = Number(selOpt?.dataset.price) || matchedProd.price || 0;
         const unitCost = Number(selOpt?.dataset.cost) || matchedProd.costPrice || Math.round(unitPrice * 0.6);
 
-        const orderId = 'ORD-' + Math.floor(100000 + Math.random() * 900000);
+        const orderId = 'LUST-' + crypto.randomUUID();
         const otpCode = String(Math.floor(100000 + Math.random() * 900000));
         const matchedCourier = couriers.find(c => c.id === courierId);
 
@@ -18653,6 +18634,8 @@ class LusterOwnerDashboard {
           depositAmount: deposit,
           remainingAmount: Math.max(0, total - deposit),
           isPartialPayment: false,
+          amountPaid: 0,
+          paymentStatus: 'unpaid',
           paymentMethod: payment,
           courierId: matchedCourier ? matchedCourier.id : '',
           courierName: matchedCourier ? matchedCourier.name : '',
@@ -19001,25 +18984,20 @@ class LusterOwnerDashboard {
           <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
             <span style="font-size:28px;">🔔</span>
             <div>
-              <div style="font-size:15px; font-weight:900; color:#FEF08A;">تفعيل الرنين الفوري عند قفل الشاشة وإغلاق التطبيق</div>
+              <div style="font-size:15px; font-weight:900; color:#FEF08A;">تنبيهات الطلبات وحدود عمل الرنين</div>
               <div style="font-size:12px; color:#E2E8F0; margin-top:2px;">
-                الرنين داخل لوحة التحكم يستمر بلا توقف حتى تضغط على "تم الاستلام". ولتلقي الرنين كالمكالمة والهاتف مغلق:
+                الرنين داخل لوحة التحكم يستمر حتى تضغط "تم الاستلام"، إذا سمح الهاتف بتشغيل الصوت. عند إغلاق الصفحة لا يمكن ضمان التنبيه.
               </div>
             </div>
           </div>
 
           <div style="background:rgba(0,0,0,0.5); padding:12px; border-radius:var(--radius-sm); border:1px solid rgba(255,255,255,0.08); font-size:12px; color:#FFF; line-height:1.6; margin-bottom:12px;">
-            📱 <strong>لتخطي نظام توفير طاقة الهاتف عند قفل الشاشة:</strong> متجرك مربوط بسيرفر إنذار فوري بأعلى درجة أولوية (Priority 5) عبر قناة NTFY:
-            <br><code style="background:#13131A; color:#FEF08A; padding:2px 8px; border-radius:4px; font-size:12px; font-weight:900; direction:ltr; display:inline-block; margin-top:4px;">luster_orders_almohandis_2026</code>
+            افتح لوحة المالك واترك الصوت مفعّلًا. قفل الشاشة أو توفير الطاقة قد يوقف عمل المتصفح. التنبيه العام لا يحمل بيانات العملاء ولا يؤكد تفاصيل الطلب.
           </div>
 
           <div style="display:flex; gap:10px; flex-wrap:wrap;">
-            <a href="https://ntfy.sh/luster_orders_almohandis_2026" target="_blank" class="btn-luxury-gold" style="padding:10px 18px; font-size:12.5px; font-weight:900; text-decoration:none; display:inline-flex; align-items:center; gap:6px;">
-              <span>📲</span> <span>ربط الرنين بقناة NTFY المباشرة</span>
-            </a>
-
             <button type="button" id="btn-owner-enable-device-alarm" class="btn-luxury-outline" style="padding:10px 18px; font-size:12.5px; font-weight:900;">
-              <span>✓</span> <span>اعتماد هذا الهاتف كجهاز للمالك للرنين 24/7</span>
+              <span>✓</span> <span>اعتماد هذا الهاتف لتنبيهات لوحة المالك</span>
             </button>
 
             <button type="button" id="btn-owner-test-siren-ring" style="background:#DC2626; color:#FFF; border:none; padding:10px 18px; border-radius:var(--radius-sm); font-size:12.5px; font-weight:900; cursor:pointer;">
@@ -19072,7 +19050,7 @@ class LusterOwnerDashboard {
               <span class="preview-letter" data-char="R" style="color:#D4AF37; display:inline-block;">R</span>
             </div>
           </div>
-          
+
           <!-- Quick Directional Action Buttons -->
           <div style="display:flex; justify-content:center; flex-wrap:wrap; gap:8px; margin-top:14px;">
             <button type="button" class="btn-quick-dir header-btn" data-dir="right" style="padding:6px 14px; font-size:12px; font-weight:800; border-color:var(--accent-gold);">➡️ يمين (Right)</button>
@@ -19081,7 +19059,7 @@ class LusterOwnerDashboard {
             <button type="button" class="btn-quick-dir header-btn" data-dir="diagonal_ur" style="padding:6px 14px; font-size:12px; font-weight:800; border-color:var(--accent-gold);">↗️ قطري صاعد</button>
             <button type="button" class="btn-quick-dir header-btn" data-dir="circular" style="padding:6px 14px; font-size:12px; font-weight:800; border-color:var(--accent-gold);">🔄 دائري (Orbit)</button>
           </div>
-          
+
           <div style="font-size:11px; color:var(--accent-gold); margin-top:10px;">
             ✦ انقر على أي حرف في المعاينة لتحديده وتخصيصه بشكل منفصل
           </div>
@@ -19408,7 +19386,7 @@ class LusterOwnerDashboard {
         container.querySelector('#motion-distance').value = defaultConfig.distance;
         container.querySelector('#motion-duration').value = defaultConfig.duration;
         updatePreview();
-        
+
         const state = this.store.getState();
         if (!state.motion) state.motion = {};
         state.motion.logoAnimation = defaultConfig;
@@ -22192,7 +22170,7 @@ class LusterOwnerDashboard {
     }
   }
 
-  
+
   // ==========================================
   // TAB: AI CHAT INSTRUCTIONS & OWNER CONTROL
   // ==========================================
@@ -22910,7 +22888,7 @@ class LusterOwnerDashboard {
             📦 إضافة منتج حقيقي جديد مع الصور والفيديوهات
           </div>
           <input type="hidden" id="edit-prod-id" value="">
-          
+
           <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:12px; margin-bottom:12px;">
             <div>
               <label style="font-size:11px; color:var(--text-muted); display:block; margin-bottom:4px;">اسم المنتج (إدخال يدوي حر للمالك) *</label>
@@ -22954,7 +22932,7 @@ class LusterOwnerDashboard {
             <div style="font-size:13px; font-weight:900; color:var(--accent-gold); margin-bottom:8px;">
               📸 وسائط المنتج (صور وفيديوهات متعددة بدون حدود مصطنعة):
             </div>
-            
+
             <input type="file" id="input-file-prod-img" accept="image/*" multiple style="display:none;">
             <input type="file" id="input-file-prod-vid" accept="video/*" style="display:none;">
 
@@ -25140,7 +25118,7 @@ class LusterOwnerDashboard {
         <!-- AI Recommendation Cards (اقتراحات العروض الذكية) -->
         <div style="font-size:14px; font-weight:900; color:var(--accent-gold);">💡 ترشيحات AI الذكية للحملات المربحة:</div>
         <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:12px;">
-          
+
           <!-- Recommendation 1: VIP Loyalty -->
           <div style="background:#13131A; border:1px solid rgba(212,175,55,0.3); border-radius:var(--radius-md); padding:14px; display:flex; flex-direction:column; justify-content:space-between; gap:12px;">
             <div>
@@ -27356,7 +27334,7 @@ class LusterApp {
               `}
             </div>
             ${(!prod.hidePrice && state.paymentSettings?.partialPayment?.enabled) ? `
-              
+
             ` : ''}
             ${(prod.stock !== undefined && Number(prod.stock) <= 0) ? `
               <div style="font-size:11px; font-weight:900; color:#EF4444; background:rgba(239,68,68,0.12); padding:4px 8px; border-radius:6px; text-align:center; margin-bottom:6px; border:1px solid rgba(239,68,68,0.3);">
@@ -27495,7 +27473,7 @@ class LusterApp {
             ${product.badge ? `<span class="product-badge" style="position:static;">${product.badge}</span>` : ''}
           </div>
           <h2 style="font-size:18px; font-weight:900; color:#FFF; margin-bottom:8px;">${product.titleAr}</h2>
-          
+
           <div style="font-size:22px; font-weight:900; color:var(--accent-gold-light); margin-bottom:12px;">
             ${product.hidePrice ? `
               <span style="font-size:15px; color:var(--text-muted); font-weight:800;">السعر عند الطلب</span>
@@ -28496,7 +28474,7 @@ if (typeof window !== 'undefined') {
                 <span>الإجمالي النهائي للفاتورة:</span>
                 <span>${grandTotal} ${currency}</span>
               </div>
-              
+
               <div style="display:flex; justify-content:space-between; font-size:11px; color:#4B5563; margin-top:2px;">
                 <span>طريقة الدفع:</span>
                 <strong>${state.paymentSettings?.methods?.[order.paymentMethod]?.nameAr || order.paymentMethod || 'الدفع عند الاستلام'}</strong>
