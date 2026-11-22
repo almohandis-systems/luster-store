@@ -7005,8 +7005,8 @@ class MotionEngine {
 
 // --- Module: store.js ---
 const DEFAULT_LUSTER_STATE = {
-  "version": 1795340720000,
-  "lastUpdated": "2026-11-22T09:46:00.000Z",
+  "version": 1795342000000,
+  "lastUpdated": "2026-11-22T10:00:00.000Z",
   "brand": {
     "name": "LUSTER",
     "subtitle": "Luxury through Motion",
@@ -10643,6 +10643,12 @@ class LusterCloudBridge {
   }
 
   async publishCatalogToCloud(fullState = null) {
+    // Owner-only publishing (22 Nov 2026): customer phones must NEVER push catalog state.
+    // A stale customer device re-publishing with a fresh timestamp was poisoning every client.
+    const isOwnerPublisher = (typeof localStorage !== 'undefined') &&
+      (localStorage.getItem('luster_owner_device_verified') === 'true' ||
+       (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('luster_owner_authenticated') === 'true'));
+    if (!isOwnerPublisher) return { skipped: 'not-owner-device' };
     const rawTarget = fullState || (this.store && this.store.state) || this.state || this.loadLocalState();
     rawTarget.version = Date.now();
     rawTarget.lastUpdated = new Date().toISOString();
